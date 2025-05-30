@@ -48,6 +48,8 @@ import { calculateScore, getScoreColor } from '../utils/score';
 // Layout containers
 const Container = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
+  paddingTop: 0, // Remove top padding to allow manual positioning
+  paddingBottom: theme.spacing(1), // Extended bottom padding by 15px
   height: '100%',
   overflow: 'hidden',
   display: 'flex',
@@ -59,6 +61,7 @@ const MainLayout = styled(Box)<{ isSmallScreen?: boolean }>(({ isSmallScreen }) 
   gap: 16,
   height: '100%',
   flexDirection: isSmallScreen ? 'column' : 'row',
+  marginTop: '-10px', // Lift all content up by 10px
 }));
 
 const LeftSection = styled(Box)(({ theme }) => ({
@@ -118,35 +121,26 @@ const CompactTableRow = styled(TableRow)(({ theme }) => ({
   },
 }));
 
-const GradientBar = styled(Box)(({ theme }) => ({
-  height: '10px',
-  background: 'linear-gradient(to right, #2196F3 0%, #4CAF50 25%, #FFEB3B 50%, #FF9800 75%, #F44336 100%)',
-  borderRadius: theme.shape.borderRadius,
-  position: 'absolute',
-  bottom: -60, // Position below X-axis
-  left: 0,
-  right: 0,
-  width: '100%',
-}));
+// Removed unused GradientBar component
 
 const ChartContainer = styled(Box)({
   position: 'relative',
   width: '100%',
-  paddingBottom: 50, // Space for gradient bar and labels
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  paddingBottom: 130, // More space for gradient bar at bottom
 });
 
 const ChartContent = styled(Box)(({ theme }) => ({
   position: 'relative',
-  width: '80%', // 80% of column width to fit X-axis numbers
+  width: '75%', // 75% of column width
   aspectRatio: '1 / 1', // Keep it square
   display: 'flex',
-  paddingLeft: '40px',
-  paddingBottom: '60px', // More space for X-axis and gradient
   marginLeft: 'auto',
   marginRight: 'auto',
-  maxWidth: '600px', // Reduced maximum size
   [theme.breakpoints.down('md')]: {
-    width: '75%',
+    width: '85%',
   },
 }));
 
@@ -165,13 +159,12 @@ const ChartScrollContainer = styled(Box)({
 
 const YAxis = styled(Box)({
   position: 'absolute',
-  left: -40,
+  left: '-15%',
   top: 0,
-  bottom: 40, // Stop at X-axis
-  width: '40px',
+  bottom: 0,
+  width: '15%',
   display: 'flex',
   flexDirection: 'column',
-  justifyContent: 'space-between',
   alignItems: 'flex-end',
   paddingRight: '8px',
 });
@@ -180,8 +173,8 @@ const XAxis = styled(Box)({
   position: 'absolute',
   left: 0,
   right: 0,
-  bottom: -40,
-  height: '40px',
+  bottom: '-10%',
+  height: '10%',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'flex-start',
@@ -198,39 +191,35 @@ const GridOverlay = styled(Box)<{ showGrid: boolean }>(({ showGrid }) => ({
   display: showGrid ? 'block' : 'none',
 }));
 
-const BarContainer = styled(Box)({
-  width: '100%',
-  height: '100%',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '2px',
-});
-
-const BarWrapper = styled(Box)({
-  display: 'flex',
-  alignItems: 'center',
-  height: '2%', // 50% of small cell height (4% / 2)
-  position: 'relative',
-  marginBottom: '2%', // Space between bars
-});
-
-const BarSegment = styled(Box)<{ width: number }>(({ width, theme }) => ({
-  height: '100%',
-  width: `${Math.max(0, Math.min(100, width))}%`,
-  backgroundColor: theme.palette.primary.main,
-  position: 'relative',
-  borderRadius: 0,
-}));
-
-const BarDot = styled(Box)<{ color: string }>(({ color }) => ({
+const DataPointsContainer = styled(Box)({
   position: 'absolute',
-  right: '-0.66%', // 33% of small cell width (2% * 0.33)
-  top: '50%',
-  transform: 'translateY(-50%)',
-  width: '1.32%', // 66% of small cell width (2% * 0.66) - diameter
-  height: '1.32%',
+  left: 0,
+  right: 0,
+  top: 0,
+  bottom: 0,
+});
+
+const DataPoint = styled(Box)<{ x: number; y: number; color: string }>(({ x, y, color }) => ({
+  position: 'absolute',
+  left: `${x}%`,
+  bottom: `${y}%`,
+  width: '1%', // 1% of grid width
+  aspectRatio: '1 / 1', // Keep circular
   borderRadius: '50%',
   backgroundColor: color,
+  transform: 'translate(-50%, 50%)', // Center on position
+  zIndex: 20,
+  cursor: 'pointer',
+}));
+
+const DataLine = styled(Box)<{ width: number; y: number }>(({ width, y, theme }) => ({
+  position: 'absolute',
+  left: 0,
+  bottom: `${y}%`,
+  width: `${width}%`,
+  height: '3px',
+  backgroundColor: theme.palette.primary.main,
+  transform: 'translateY(50%)', // Center on grid line
   zIndex: 10,
 }));
 
@@ -525,14 +514,7 @@ const StatisticsTab: React.FC = () => {
     return null;
   };
 
-  // Generate Y-axis labels - 0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50
-  const getYAxisLabels = () => {
-    const labels = [];
-    for (let i = 0; i <= 50; i += 5) {
-      labels.push(i);
-    }
-    return labels.reverse(); // Show highest at top: [50, 45, 40, ..., 5, 0]
-  };
+  // Removed unused getYAxisLabels function - using static labels instead
 
   // Check if selected session is the latest
   const isLatestSession = selectedSession && sessionsWithScores[0] && selectedSession.id === sessionsWithScores[0].id;
@@ -790,7 +772,7 @@ const StatisticsTab: React.FC = () => {
   );
 
   const renderCharts = () => {
-    const yAxisLabels = getYAxisLabels();
+    // const yAxisLabels = getYAxisLabels(); // Not needed - using static labels
     const dataCount = activeChart === 'wpmDistribution' ? wpmDistributionData.length : (selectedSession?.keyPresses.length || 0);
     const needsScroll = dataCount > 50; // Changed from 250 to 50
 
@@ -830,7 +812,7 @@ const StatisticsTab: React.FC = () => {
             <YAxis>
               <Typography variant="caption" sx={{ 
                 position: 'absolute',
-                left: -35,
+                left: '-50%',
                 top: '50%', // Aligned with 25 on Y-axis
                 transform: 'rotate(-90deg)',
                 transformOrigin: 'center',
@@ -838,28 +820,33 @@ const StatisticsTab: React.FC = () => {
                 fontSize: '0.8rem',
                 fontWeight: 600
               }}>
-                Keypress #
+                {activeChart === 'wpmDistribution' ? 'Session #' : 'Keypress #'}
               </Typography>
-              {yAxisLabels.map((label, index) => (
+              {/* Y-axis labels aligned with horizontal grid lines */}
+              {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((value) => (
                 <Typography 
-                  key={index} 
+                  key={value} 
                   variant="caption" 
                   sx={{ 
                     fontSize: '0.7rem',
                     fontWeight: 500,
                     position: 'absolute',
                     right: 8,
-                    top: `${index * 10}%`, // Align with large grid horizontal lines
-                    transform: 'translateY(-50%)'
+                    bottom: `${value * 2}%`, // Each unit = 2% (50 units = 100%)
+                    transform: 'translateY(50%)'
                   }}
                 >
-                  {label}
+                  {value}
                 </Typography>
               ))}
             </YAxis>
 
             {/* Chart scroll container */}
-            <ChartScrollContainer>
+            <ChartScrollContainer
+              sx={{
+                overflowY: needsScroll ? 'auto' : 'hidden',
+              }}
+            >
               {/* Grid - 10x10 large cells with 5x5 small cells inside each */}
               <GridOverlay showGrid={showGrid}>
                 <svg width="100%" height="100%" style={{ position: 'absolute' }}>
@@ -928,36 +915,36 @@ const StatisticsTab: React.FC = () => {
                 </svg>
               </GridOverlay>
 
-              {/* Chart data */}
-              <BarContainer style={{ minHeight: needsScroll ? `${dataCount * 16}px` : '100%' }}>
-                {activeChart === 'wpmDistribution' && (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px', height: '100%' }}>
-                    {wpmDistributionData.map((bar, idx) => (
-                      <Tooltip key={idx} title={`Session ${bar.sessionNumber}: ${bar.wpm.toFixed(1)} WPM`}>
-                        <BarWrapper>
-                          <BarSegment width={bar.width}>
-                            <BarDot color={bar.color} />
-                          </BarSegment>
-                        </BarWrapper>
+              {/* Chart data points */}
+              <DataPointsContainer style={{ height: needsScroll ? `${dataCount * 2}%` : '100%', minHeight: '100%' }}>
+                {activeChart === 'wpmDistribution' && wpmDistributionData.map((data, idx) => {
+                  const yPosition = (idx + 1) * 2; // Each point on a grid line (2% intervals)
+                  return (
+                    <React.Fragment key={idx}>
+                      {/* Horizontal line from Y-axis to dot */}
+                      <DataLine width={data.width} y={yPosition} />
+                      {/* Data point dot */}
+                      <Tooltip title={`Session ${data.sessionNumber}: ${data.wpm.toFixed(1)} WPM`}>
+                        <DataPoint x={data.width} y={yPosition} color={data.color} />
                       </Tooltip>
-                    ))}
-                  </Box>
-                )}
+                    </React.Fragment>
+                  );
+                })}
                 
-                {activeChart === 'smoothedWpm' && selectedSession && (
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px', height: '100%', justifyContent: 'flex-end' }}>
-                    {smoothedWpmData.map((bar, idx) => (
-                      <Tooltip key={idx} title={`Keypress ${bar.keypressNumber}: ${bar.wpm.toFixed(1)} WPM`}>
-                        <BarWrapper>
-                          <BarSegment width={bar.width}>
-                            <BarDot color={bar.color} />
-                          </BarSegment>
-                        </BarWrapper>
+                {activeChart === 'smoothedWpm' && selectedSession && smoothedWpmData.map((data, idx) => {
+                  const yPosition = (idx + 1) * 2; // Each point on a grid line (2% intervals)
+                  return (
+                    <React.Fragment key={idx}>
+                      {/* Horizontal line from Y-axis to dot */}
+                      <DataLine width={data.width} y={yPosition} />
+                      {/* Data point dot */}
+                      <Tooltip title={`Keypress ${data.keypressNumber}: ${data.wpm.toFixed(1)} WPM`}>
+                        <DataPoint x={data.width} y={yPosition} color={data.color} />
                       </Tooltip>
-                    ))}
-                  </Box>
-                )}
-              </BarContainer>
+                    </React.Fragment>
+                  );
+                })}
+              </DataPointsContainer>
 
               {/* Dashed vertical line from triangle for average WPM */}
               {activeChart === 'smoothedWpm' && selectedSession && (
@@ -972,6 +959,26 @@ const StatisticsTab: React.FC = () => {
                     x2={`${(selectedSession.wpm / 250) * 100}%`}
                     y2="100%"
                     stroke={getWpmColor(selectedSession.wpm)}
+                    strokeWidth="2"
+                    strokeDasharray="4 4"
+                    opacity="0.8"
+                  />
+                </svg>
+              )}
+              
+              {/* Dashed vertical line for WPM distribution average */}
+              {activeChart === 'wpmDistribution' && averages && (
+                <svg 
+                  width="100%" 
+                  height="100%" 
+                  style={{ position: 'absolute', top: 0, left: 0, zIndex: 15 }}
+                >
+                  <line
+                    x1={`${(averages.avgWPM / 250) * 100}%`}
+                    y1="0"
+                    x2={`${(averages.avgWPM / 250) * 100}%`}
+                    y2="100%"
+                    stroke={getWpmColor(averages.avgWPM)}
                     strokeWidth="2"
                     strokeDasharray="4 4"
                     opacity="0.8"
@@ -999,9 +1006,10 @@ const StatisticsTab: React.FC = () => {
               ))}
               <Typography variant="caption" sx={{ 
                 position: 'absolute',
-                left: '50%', // Under 125 WPM mark
-                bottom: -20,
-                transform: 'translateX(-50%)',
+                left: '100%', // At right edge
+                marginLeft: '20px', // Space after 250
+                marginTop: '6px', // Manual adjustment for better alignment
+                top: '0', // Align with X-axis numbers
                 fontSize: '0.8rem',
                 fontWeight: 600
               }}>
@@ -1010,38 +1018,68 @@ const StatisticsTab: React.FC = () => {
             </XAxis>
           </ChartContent>
 
-          {/* Gradient bar */}
-          <GradientBar>
-            {/* Triangular marker for average WPM */}
+          {/* Gradient bar container - same width as grid */}
+          <Box sx={{ 
+            position: 'relative',
+            width: '75%', // Same as ChartContent width
+            marginTop: '25px', // Lowered by 25px to align with grid
+            '@media (max-width: 960px)': {
+              width: '85%',
+            }
+          }}>
+            {/* Gradient bar */}
+            <Box sx={{ 
+              width: '100%',
+              height: '10px',
+              background: 'linear-gradient(to right, #2196F3 0%, #4CAF50 25%, #FFEB3B 50%, #FF9800 75%, #F44336 100%)',
+              borderRadius: 1,
+            }} />
+            
+            {/* Triangular marker for session avg WPM. Pointing up from bottom of grid */}
             {activeChart === 'smoothedWpm' && selectedSession && (
               <Tooltip title={`Session Average: ${selectedSession.wpm.toFixed(0)} WPM`}>
                 <Box
                   sx={{
                     position: 'absolute',
-                    left: `${(selectedSession.wpm / 250) * 100}%`,
-                    top: -12, // Position above gradient bar
+                    left: `${(selectedSession.wpm / 250) * 100}%`, // Position as percentage
+                    bottom: '100%', // At bottom edge of gradient (top of triangle at grid bottom)
+                    marginBottom: '20px', // Move up to align with grid bottom
                     transform: 'translateX(-50%)',
                     width: 0,
                     height: 0,
-                    borderLeft: '6px solid transparent',
-                    borderRight: '6px solid transparent',
-                    borderTop: '10px solid',
-                    borderTopColor: getWpmColor(selectedSession.wpm),
-                    zIndex: 20,
+                    borderLeft: '8px solid transparent',
+                    borderRight: '8px solid transparent',
+                    borderBottom: '12px solid', // Points upward (flipped)
+                    borderBottomColor: getWpmColor(selectedSession.wpm),
+                    zIndex: 25,
                   }}
                 />
               </Tooltip>
             )}
-          </GradientBar>
+            
+            {/* Triangular marker for WPM distribution average */}
+            {activeChart === 'wpmDistribution' && averages && (
+              <Tooltip title={`Average: ${averages.avgWPM.toFixed(0)} WPM`}>
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: `${(averages.avgWPM / 250) * 100}%`, // Position as percentage
+                    bottom: '100%', // At bottom edge of gradient (top of triangle at grid bottom)
+                    marginBottom: '20px', // Move up to align with grid bottom
+                    transform: 'translateX(-50%)',
+                    width: 0,
+                    height: 0,
+                    borderLeft: '8px solid transparent',
+                    borderRight: '8px solid transparent',
+                    borderBottom: '12px solid', // Points upward (flipped)
+                    borderBottomColor: getWpmColor(averages.avgWPM),
+                    zIndex: 25,
+                  }}
+                />
+              </Tooltip>
+            )}
+          </Box>
           
-          <Typography variant="caption" sx={{ 
-            position: 'absolute', 
-            bottom: -45, 
-            right: 0,
-            color: 'text.secondary'
-          }}>
-            250 WPM
-          </Typography>
         </ChartContainer>
       </Paper>
     );
