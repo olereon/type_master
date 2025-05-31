@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -132,54 +132,48 @@ const ChartContainer = styled(Box)({
   paddingBottom: 130, // More space for gradient bar at bottom
 });
 
-const ChartContent = styled(Box)(({ theme }) => ({
+// Scrollbox container - always square visible area
+const ChartScrollBox = styled(Box)(({ theme }) => ({
   position: 'relative',
-  width: '75%', // 75% of column width
-  aspectRatio: '1 / 1', // Keep it square
-  display: 'flex',
+  width: '75%', // Base width
+  aspectRatio: '1 / 1', // Square visible area
   marginLeft: 'auto',
   marginRight: 'auto',
+  overflow: 'hidden', // Hide overflow, scrollbar will be inside
+  backgroundColor: 'rgba(255, 255, 255, 0.02)', // Subtle background
   [theme.breakpoints.down('md')]: {
     width: '85%',
   },
 }));
 
+// Inner scrollable container
 const ChartScrollContainer = styled(Box)({
   position: 'absolute',
   left: 0,
   right: 0,
   top: 0,
   bottom: 0,
-  overflowY: 'auto',
+  overflowY: 'scroll', // Always show scrollbar
   overflowX: 'hidden',
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'flex-end',
+  // Scrollbar styling
+  '&::-webkit-scrollbar': {
+    width: '10px',
+    backgroundColor: 'rgba(128, 128, 128, 0.1)',
+  },
+  '&::-webkit-scrollbar-track': {
+    backgroundColor: 'rgba(128, 128, 128, 0.05)',
+    borderRadius: '5px',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    backgroundColor: 'rgba(128, 128, 128, 0.5)',
+    borderRadius: '5px',
+    '&:hover': {
+      backgroundColor: 'rgba(128, 128, 128, 0.7)',
+    },
+  },
 });
 
-const YAxis = styled(Box)({
-  position: 'absolute',
-  left: '-15%',
-  top: 0,
-  bottom: 0,
-  width: '15%',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'flex-end',
-  paddingRight: '8px',
-});
-
-const XAxis = styled(Box)({
-  position: 'absolute',
-  left: 0,
-  right: 0,
-  bottom: '-10%',
-  height: '10%',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  paddingTop: '8px',
-});
+// Y-axis component removed - now handled inline within scroll container
 
 const GridOverlay = styled(Box)<{ showGrid: boolean }>(({ showGrid }) => ({
   position: 'absolute',
@@ -203,8 +197,8 @@ const DataPoint = styled(Box)<{ x: number; y: number; color: string }>(({ x, y, 
   position: 'absolute',
   left: `${x}%`,
   bottom: `${y}%`,
-  width: '1%', // 1% of grid width
-  aspectRatio: '1 / 1', // Keep circular
+  width: '10px', // Fixed size for consistent appearance
+  height: '10px',
   borderRadius: '50%',
   backgroundColor: color,
   transform: 'translate(-50%, 50%)', // Center on position
@@ -221,6 +215,33 @@ const DataLine = styled(Box)<{ width: number; y: number }>(({ width, y, theme })
   backgroundColor: theme.palette.primary.main,
   transform: 'translateY(50%)', // Center on grid line
   zIndex: 10,
+}));
+
+const ErrorCross = styled(Box)<{ x: number; y: number }>(({ x, y }) => ({
+  position: 'absolute',
+  left: `${x}%`,
+  bottom: `${y}%`,
+  width: '13px',
+  height: '13px',
+  transform: 'translate(-50%, 50%)', // Center on data point
+  zIndex: 25,
+  pointerEvents: 'none',
+  '&::before, &::after': {
+    content: '""',
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '13px',
+    height: '2px',
+    backgroundColor: '#FF0000',
+    transform: 'translate(-50%, -50%)',
+  },
+  '&::before': {
+    transform: 'translate(-50%, -50%) rotate(45deg)',
+  },
+  '&::after': {
+    transform: 'translate(-50%, -50%) rotate(-45deg)',
+  },
 }));
 
 // Header icon with value
@@ -244,18 +265,45 @@ interface ComparativeKeyStatistics extends KeyStatistics {
   };
 }
 
-// Helper function to get color from WPM value
-const getWpmColor = (wpm: number, maxWpm: number = 250): string => {
-  const normalized = Math.min(1, wpm / maxWpm);
+// New gradient-based color function for more accurate color mapping
+const getGradientColor = (wpm: number): string => {
+  const normalized = Math.min(Math.max(wpm / 250, 0), 1); // Clamp between 0 and 1
   
-  if (normalized < 0.2) return '#2196F3'; // Blue
-  if (normalized < 0.4) return '#4CAF50'; // Green
-  if (normalized < 0.6) return '#FFEB3B'; // Yellow
-  if (normalized < 0.8) return '#FF9800'; // Orange
-  return '#F44336'; // Red
+  // Define the gradient colors matching the gradient bar
+  const colors = [
+    { pos: 0, r: 33, g: 150, b: 243 },    // #2196F3 (Blue)
+    { pos: 0.25, r: 76, g: 175, b: 80 },  // #4CAF50 (Green)
+    { pos: 0.5, r: 255, g: 235, b: 59 },  // #FFEB3B (Yellow)
+    { pos: 0.75, r: 255, g: 152, b: 0 },  // #FF9800 (Orange)
+    { pos: 1, r: 244, g: 67, b: 54 }      // #F44336 (Red)
+  ];
+  
+  // Find the two colors to interpolate between
+  let startColor = colors[0];
+  let endColor = colors[1];
+  
+  for (let i = 0; i < colors.length - 1; i++) {
+    if (normalized >= colors[i].pos && normalized <= colors[i + 1].pos) {
+      startColor = colors[i];
+      endColor = colors[i + 1];
+      break;
+    }
+  }
+  
+  // Calculate interpolation factor
+  const range = endColor.pos - startColor.pos;
+  const factor = range === 0 ? 0 : (normalized - startColor.pos) / range;
+  
+  // Interpolate RGB values
+  const r = Math.round(startColor.r + (endColor.r - startColor.r) * factor);
+  const g = Math.round(startColor.g + (endColor.g - startColor.g) * factor);
+  const b = Math.round(startColor.b + (endColor.b - startColor.b) * factor);
+  
+  return `rgb(${r}, ${g}, ${b})`;
 };
 
 const StatisticsTab: React.FC = () => {
+  console.log('StatisticsTab loaded with new changes!'); // Debug log
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('lg'));
   const { sessions, settings, resetAllSessions, currentSession } = useAppStore();
@@ -266,10 +314,14 @@ const StatisticsTab: React.FC = () => {
   const [smallScreenTab, setSmallScreenTab] = useState(0);
   const [sortColumn, setSortColumn] = useState<'key' | 'avgTime' | 'deviationPercent'>('key');
   const [showGrid, setShowGrid] = useState(true);
+  const [sessionSortNewestFirst, setSessionSortNewestFirst] = useState(true); // Default: newest first
+  const [keySortColumn, setKeySortColumn] = useState<'key' | 'wpm' | 'accuracy' | 'deviation'>('key');
+  const [keySortAscending, setKeySortAscending] = useState(true);
+  const chartScrollRef = useRef<HTMLDivElement>(null);
 
-  // Calculate session scores once - filter out old UUID sessions
+  // Calculate session scores once - filter out old UUID sessions and apply sorting
   const sessionsWithScores = useMemo(() => {
-    return sessions
+    const filtered = sessions
       .filter(session => {
         // Keep only sessions with timestamp format (contains dashes and numbers)
         return /^\d{5}-\d{4}-\d{2}-\d{2}-\d{6}$/.test(session.id);
@@ -285,7 +337,16 @@ const StatisticsTab: React.FC = () => {
           settings.scoreK2
         ),
       }));
-  }, [sessions, settings]);
+    
+    // Sort sessions based on sessionSortNewestFirst
+    return filtered.sort((a, b) => {
+      if (sessionSortNewestFirst) {
+        return b.id.localeCompare(a.id); // Newest first (higher IDs first)
+      } else {
+        return a.id.localeCompare(b.id); // Oldest first (lower IDs first)
+      }
+    });
+  }, [sessions, settings, sessionSortNewestFirst]);
 
   const selectedSession = useMemo(() => {
     if (selectedSessionId) {
@@ -383,12 +444,27 @@ const StatisticsTab: React.FC = () => {
     
     return result
       .sort((a: ComparativeKeyStatistics, b: ComparativeKeyStatistics) => {
-        if (sortColumn === 'key') return a.key.localeCompare(b.key);
-        if (sortColumn === 'avgTime') return a.avgTime - b.avgTime;
-        if (sortColumn === 'deviationPercent') return a.deviationPercent - b.deviationPercent;
-        return 0;
+        let compareValue = 0;
+        if (keySortColumn === 'key') {
+          compareValue = a.key.localeCompare(b.key);
+        } else if (keySortColumn === 'wpm') {
+          const aWpm = 12000 / a.avgTime;
+          const bWpm = 12000 / b.avgTime;
+          compareValue = aWpm - bWpm;
+        } else if (keySortColumn === 'accuracy') {
+          compareValue = (a.accuracy || 0) - (b.accuracy || 0);
+        } else if (keySortColumn === 'deviation') {
+          compareValue = a.deviationPercent - b.deviationPercent;
+        } else {
+          // Default old sorting
+          if (sortColumn === 'key') return a.key.localeCompare(b.key);
+          if (sortColumn === 'avgTime') return a.avgTime - b.avgTime;
+          if (sortColumn === 'deviationPercent') return a.deviationPercent - b.deviationPercent;
+          return 0;
+        }
+        return keySortAscending ? compareValue : -compareValue;
       });
-  }, [selectedSession, averages, sortColumn]);
+  }, [selectedSession, averages, sortColumn, keySortColumn, keySortAscending]);
 
   // Comparative key statistics
   const comparativeKeyStatistics = useMemo((): ComparativeKeyStatistics[] => {
@@ -420,7 +496,7 @@ const StatisticsTab: React.FC = () => {
       sessionNumber: index + 1,
       wpm: session.wpm,
       width: (session.wpm / 250) * 100,
-      color: getWpmColor(session.wpm),
+      color: getGradientColor(session.wpm), // Use gradient colors
     }));
   }, [sessionsWithScores]);
 
@@ -456,16 +532,30 @@ const StatisticsTab: React.FC = () => {
       }
       
       const clampedWpm = Math.min(250, Math.max(0, wpm));
+      const keyPress = selectedSession.keyPresses[i];
       data.push({
         keypressNumber: i + 1,
         wpm: clampedWpm,
         width: (clampedWpm / 250) * 100,
-        color: getWpmColor(clampedWpm),
+        color: getGradientColor(clampedWpm), // Use gradient colors
+        isIncorrect: keyPress && keyPress.correct === false, // Track incorrect keypresses
       });
     }
     
     return data;
   }, [selectedSession]);
+
+  // Effect to scroll chart to bottom when data changes or chart type changes
+  useEffect(() => {
+    if (chartScrollRef.current) {
+      // Small delay to ensure content is rendered
+      setTimeout(() => {
+        if (chartScrollRef.current) {
+          chartScrollRef.current.scrollTop = chartScrollRef.current.scrollHeight;
+        }
+      }, 100);
+    }
+  }, [activeChart, wpmDistributionData.length, smoothedWpmData.length]);
 
   // Session metrics calculation
   const sessionMetrics = useMemo((): SessionMetrics => {
@@ -578,13 +668,22 @@ const StatisticsTab: React.FC = () => {
 
   const renderSessionsList = () => (
     <Paper sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
-        <Typography variant="h6">Sessions</Typography>
-        {selectedSession && (
-          <Typography variant="body2" color="text.secondary">
-            Selected: Session #{selectedSession.id} {isLatestSession ? '(LAST)' : ''}
-          </Typography>
-        )}
+      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box>
+          <Typography variant="h6">Sessions</Typography>
+          {selectedSession && (
+            <Typography variant="body2" color="text.secondary">
+              Selected: Session #{selectedSession.id} {isLatestSession ? '(LAST)' : ''}
+            </Typography>
+          )}
+        </Box>
+        <IconButton 
+          size="small"
+          onClick={() => setSessionSortNewestFirst(!sessionSortNewestFirst)}
+          title={sessionSortNewestFirst ? 'Sort: Newest First' : 'Sort: Oldest First'}
+        >
+          {sessionSortNewestFirst ? '⬇️' : '⬆️'}
+        </IconButton>
       </Box>
       <SessionsList sx={{ p: 2 }}>
         {sessionsWithScores.length === 0 ? (
@@ -630,6 +729,18 @@ const StatisticsTab: React.FC = () => {
                           {formatTime((session.endTime ? new Date(session.endTime).getTime() : Date.now()) - new Date(session.startTime).getTime())}
                         </Typography>
                       </Box>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <TextFieldsIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                        <Typography variant="caption" color="text.secondary">
+                          {session.typedChars}
+                        </Typography>
+                      </Box>
+                      <Box display="flex" alignItems="center" gap={0.5}>
+                        <ArticleIcon sx={{ fontSize: 14, color: 'text.secondary' }} />
+                        <Typography variant="caption" color="text.secondary">
+                          {Math.floor(session.typedChars / 5)}
+                        </Typography>
+                      </Box>
                     </Box>
                   </Box>
                   <Box display="flex" gap={0.5} alignItems="center">
@@ -666,20 +777,37 @@ const StatisticsTab: React.FC = () => {
   const renderKeyPerformanceTable = () => (
     <Paper sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
       <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6">Key Performance</Typography>
-        <ToggleButtonGroup
-          value={tableMode}
-          exclusive
-          onChange={(_, newMode) => newMode && setTableMode(newMode)}
-          size="small"
-        >
-          <ToggleButton value="current">
-            Current
-          </ToggleButton>
-          <ToggleButton value="comparative">
-            Comparative
-          </ToggleButton>
-        </ToggleButtonGroup>
+        <Typography variant="h6">Key Statistics</Typography>
+        <Box display="flex" gap={1} alignItems="center">
+          <ToggleButtonGroup
+            value={tableMode}
+            exclusive
+            onChange={(_, newMode) => newMode && setTableMode(newMode)}
+            size="small"
+            sx={{ marginLeft: '-35px' }} // Move left by 35px
+          >
+            <ToggleButton value="current">
+              SLCT
+            </ToggleButton>
+            <ToggleButton value="comparative">
+              CMPR
+            </ToggleButton>
+          </ToggleButtonGroup>
+          <Box display="flex" gap={0.5}>
+            <IconButton size="small" onClick={() => { setKeySortColumn('key'); setKeySortAscending(!keySortAscending); }} title="Sort A-Z">
+              🔤
+            </IconButton>
+            <IconButton size="small" onClick={() => { setKeySortColumn('accuracy'); setKeySortAscending(!keySortAscending); }} title="Sort by Accuracy">
+              🎯
+            </IconButton>
+            <IconButton size="small" onClick={() => { setKeySortColumn('wpm'); setKeySortAscending(!keySortAscending); }} title="Sort by WPM">
+              ⚡
+            </IconButton>
+            <IconButton size="small" onClick={() => { setKeySortColumn('deviation'); setKeySortAscending(!keySortAscending); }} title="Sort by Deviation">
+              📊
+            </IconButton>
+          </Box>
+        </Box>
       </Box>
       
       <TableContainer sx={{ flex: 1 }}>
@@ -697,7 +825,7 @@ const StatisticsTab: React.FC = () => {
                 onClick={() => setSortColumn('avgTime')}
                 sx={{ cursor: 'pointer', userSelect: 'none' }}
               >
-                Time {sortColumn === 'avgTime' && '↓'}
+                WPM {sortColumn === 'avgTime' && '↓'}
               </TableCell>
               <TableCell 
                 align="right"
@@ -719,13 +847,13 @@ const StatisticsTab: React.FC = () => {
                       {stat.key === ' ' ? '␣' : stat.key}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      ({(stat.accuracy || 0).toFixed(0)}%)
+                      ({(stat.accuracy || 0).toFixed(1)}%)
                     </Typography>
                   </Box>
                 </TableCell>
                 <TableCell align="right">
                   <Box display="flex" alignItems="center" justifyContent="flex-end" gap={0.5}>
-                    <Typography variant="body2">{stat.avgTime.toFixed(0)}ms</Typography>
+                    <Typography variant="body2">{(12000 / stat.avgTime).toFixed(1)}</Typography>
                     {tableMode === 'comparative' && stat.deltas && (
                       <>
                         {stat.deltas.keypressSpeed > 0 ? (
@@ -758,7 +886,7 @@ const StatisticsTab: React.FC = () => {
                     <Typography variant="body2">{stat.correctPresses}</Typography>
                     {tableMode === 'comparative' && stat.deltas && (
                       <Typography variant="caption" color={stat.deltas.accuracy > 0 ? 'success.main' : 'error.main'} sx={{ fontSize: '0.7rem' }}>
-                        ({stat.deltas.accuracy > 0 ? '+' : ''}{stat.deltas.accuracy.toFixed(0)}%)
+                        ({stat.deltas.accuracy > 0 ? '+' : ''}{stat.deltas.accuracy.toFixed(1)}%)
                       </Typography>
                     )}
                   </Box>
@@ -772,12 +900,24 @@ const StatisticsTab: React.FC = () => {
   );
 
   const renderCharts = () => {
-    // const yAxisLabels = getYAxisLabels(); // Not needed - using static labels
     const dataCount = activeChart === 'wpmDistribution' ? wpmDistributionData.length : (selectedSession?.keyPresses.length || 0);
-    const needsScroll = dataCount > 50; // Changed from 250 to 50
+    
+    // New architecture calculations
+    const yAxisLabelWidth = 30; // Width reserved for Y-axis labels
+    const gridPadding = 15; // Top and bottom padding for grid
+    const scrollbarWidth = 10; // Width of scrollbar
+    
+    // Grid dimensions
+    const totalDataPoints = Math.max(50, dataCount); // Minimum 50 rows
+    const largeCellRows = Math.floor(totalDataPoints / 5); // Exactly N_data_points // 5
+    const gridRows = totalDataPoints; // Dynamic rows based on data
+    
+    // Calculate the chart content height dynamically
+    // Height = (number of rows / 50) * 100% of container height
+    const chartContentHeight = (gridRows / 50) * 100;
 
     return (
-      <Paper sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', p: 2 }}>
+      <Paper sx={{ flex: 1, overflow: 'visible', display: 'flex', flexDirection: 'column', p: 2 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" sx={{ ml: '150px' }}>Performance Visualization</Typography>
           <Box display="flex" gap={1}>
@@ -807,99 +947,142 @@ const StatisticsTab: React.FC = () => {
         </Box>
         
         <ChartContainer>
-          <ChartContent>
-            {/* Y-axis */}
-            <YAxis>
-              <Typography variant="caption" sx={{ 
-                position: 'absolute',
-                left: '-50%',
-                top: '50%', // Aligned with 25 on Y-axis
-                transform: 'rotate(-90deg)',
-                transformOrigin: 'center',
-                whiteSpace: 'nowrap',
-                fontSize: '0.8rem',
-                fontWeight: 600
-              }}>
-                {activeChart === 'wpmDistribution' ? 'Session #' : 'Keypress #'}
-              </Typography>
-              {/* Y-axis labels aligned with horizontal grid lines */}
-              {[0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50].map((value) => (
-                <Typography 
-                  key={value} 
-                  variant="caption" 
-                  sx={{ 
-                    fontSize: '0.7rem',
-                    fontWeight: 500,
+          {/* Y-axis label - outside scrollbox on the LEFT */}
+          <Typography variant="caption" sx={{ 
+            position: 'absolute',
+            left: 'calc(12.5% - 90px)', // 12.5% = (100% - 75%) / 2, then 90px to the left (was 50px, now +40px more)
+            top: '37%', // Center on scrollbox ??? TESTING 37% for proper position alignment
+            transform: 'rotate(-90deg)',
+            transformOrigin: 'center',
+            whiteSpace: 'nowrap',
+            fontSize: '1.6rem', // Doubled from 0.8rem
+            fontWeight: 600,
+            zIndex: 30
+          }}>
+            {activeChart === 'wpmDistribution' ? 'Session #' : 'Keypress #'}
+          </Typography>
+
+          <ChartScrollBox>
+            {/* Chart scroll container */}
+            <ChartScrollContainer ref={chartScrollRef}>
+              {/* Chart content wrapper - contains grid and all elements */}
+              <Box 
+                sx={{ 
+                  width: '100%',
+                  height: `${chartContentHeight}%`,
+                  minHeight: '100%',
+                  position: 'relative',
+                  display: 'flex',
+                }}
+              >
+                {/* Y-axis labels container */}
+                <Box
+                  sx={{
                     position: 'absolute',
-                    right: 8,
-                    bottom: `${value * 2}%`, // Each unit = 2% (50 units = 100%)
-                    transform: 'translateY(50%)'
+                    left: 0,
+                    top: `${gridPadding}px`,
+                    bottom: `${gridPadding}px`,
+                    width: `${yAxisLabelWidth}px`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    paddingRight: '4px',
+                    zIndex: 25,
                   }}
                 >
-                  {value}
-                </Typography>
-              ))}
-            </YAxis>
+                  {/* Y-axis labels aligned with large grid lines */}
+                  {Array.from({ length: largeCellRows + 1 }, (_, i) => i * 5).map((value) => (
+                    <Typography 
+                      key={value} 
+                      variant="caption" 
+                      sx={{ 
+                        fontSize: '0.65rem',
+                        fontWeight: 500,
+                        position: 'absolute',
+                        right: 4,
+                        bottom: `${(value / gridRows) * 100}%`,
+                        transform: 'translateY(50%)',
+                        color: 'text.secondary',
+                        minWidth: '20px',
+                        textAlign: 'right',
+                      }}
+                    >
+                      {value}
+                    </Typography>
+                  ))}
+                </Box>
 
-            {/* Chart scroll container */}
-            <ChartScrollContainer
-              sx={{
-                overflowY: needsScroll ? 'auto' : 'hidden',
-              }}
-            >
-              {/* Grid - 10x10 large cells with 5x5 small cells inside each */}
-              <GridOverlay showGrid={showGrid}>
-                <svg width="100%" height="100%" style={{ position: 'absolute' }}>
-                  {/* Small cell grid lines (5x5 within each large cell) - 2% intervals */}
-                  {[...Array(49)].map((_, i) => (
-                    <React.Fragment key={`grid-small-${i}`}>
-                      {/* Horizontal small grid lines */}
-                      <line
-                        x1="0"
-                        y1={`${(i + 1) * 2}%`}
-                        x2="100%"
-                        y2={`${(i + 1) * 2}%`}
-                        stroke="#e0e0e0"
-                        strokeWidth="0.5"
-                        opacity="0.3"
-                      />
-                      {/* Vertical small grid lines */}
-                      <line
-                        x1={`${(i + 1) * 2}%`}
-                        y1="0"
-                        x2={`${(i + 1) * 2}%`}
-                        y2="100%"
-                        stroke="#e0e0e0"
-                        strokeWidth="0.5"
-                        opacity="0.3"
-                      />
-                    </React.Fragment>
+                {/* Grid container */}
+                <Box
+                  sx={{
+                    position: 'absolute',
+                    left: `${yAxisLabelWidth}px`,
+                    right: 0,
+                    top: `${gridPadding}px`,
+                    bottom: `${gridPadding}px`,
+                    width: `calc(100% - ${yAxisLabelWidth}px)`,
+                  }}
+                >
+
+                {/* Dynamic Grid - Fixed 50 columns, expandable rows */}
+                <GridOverlay showGrid={showGrid}>
+                  <svg width="100%" height="100%" style={{ position: 'absolute' }}>
+                  {/* Small cell grid lines - 50x(totalGridRows) */}
+                  {/* Horizontal lines - one per row */}
+                  {[...Array(gridRows - 1)].map((_, i) => (
+                    <line
+                      key={`grid-small-h-${i}`}
+                      x1="0"
+                      y1={`${((i + 1) / gridRows) * 100}%`}
+                      x2="100%"
+                      y2={`${((i + 1) / gridRows) * 100}%`}
+                      stroke="#e0e0e0"
+                      strokeWidth="0.5"
+                      opacity="0.3"
+                    />
                   ))}
                   
-                  {/* Large cell grid lines (10x10) - 10% intervals */}
+                  {/* Large cell grid lines - 10x(largeCellRows) */}
+                  {/* Horizontal lines - every 5 small cells */}
+                  {[...Array(largeCellRows - 1)].map((_, i) => (
+                    <line
+                      key={`grid-large-h-${i}`}
+                      x1="0"
+                      y1={`${((i + 1) * 5 / gridRows) * 100}%`}
+                      x2="100%"
+                      y2={`${((i + 1) * 5 / gridRows) * 100}%`}
+                      stroke="#666"
+                      strokeWidth="1.5"
+                      opacity="0.8"
+                    />
+                  ))}
+                  {/* Vertical lines - always 49 (50 columns) */}
+                  {[...Array(49)].map((_, i) => (
+                    <line
+                      key={`grid-small-v-${i}`}
+                      x1={`${(i + 1) * 2}%`}
+                      y1="0"
+                      x2={`${(i + 1) * 2}%`}
+                      y2="100%"
+                      stroke="#e0e0e0"
+                      strokeWidth="0.5"
+                      opacity="0.3"
+                    />
+                  ))}
+                  
+                  
+                  {/* Vertical large grid lines (always 10 columns) */}
                   {[...Array(9)].map((_, i) => (
-                    <React.Fragment key={`grid-large-${i}`}>
-                      {/* Horizontal large grid lines */}
-                      <line
-                        x1="0"
-                        y1={`${(i + 1) * 10}%`}
-                        x2="100%"
-                        y2={`${(i + 1) * 10}%`}
-                        stroke="#666"
-                        strokeWidth="1.5"
-                        opacity="0.8"
-                      />
-                      {/* Vertical large grid lines */}
-                      <line
-                        x1={`${(i + 1) * 10}%`}
-                        y1="0"
-                        x2={`${(i + 1) * 10}%`}
-                        y2="100%"
-                        stroke="#666"
-                        strokeWidth="1.5"
-                        opacity="0.8"
-                      />
-                    </React.Fragment>
+                    <line
+                      key={`grid-large-vertical-${i}`}
+                      x1={`${(i + 1) * 10}%`}
+                      y1="0"
+                      x2={`${(i + 1) * 10}%`}
+                      y2="100%"
+                      stroke="#666"
+                      strokeWidth="1.5"
+                      opacity="0.8"
+                    />
                   ))}
                   
                   {/* Chart border */}
@@ -915,10 +1098,11 @@ const StatisticsTab: React.FC = () => {
                 </svg>
               </GridOverlay>
 
-              {/* Chart data points */}
-              <DataPointsContainer style={{ height: needsScroll ? `${dataCount * 2}%` : '100%', minHeight: '100%' }}>
+                {/* Chart data points */}
+                <DataPointsContainer style={{ height: '100%', minHeight: '100%' }}>
                 {activeChart === 'wpmDistribution' && wpmDistributionData.map((data, idx) => {
-                  const yPosition = (idx + 1) * 2; // Each point on a grid line (2% intervals)
+                  // Position data points to align with horizontal grid lines
+                  const yPosition = ((idx + 1) / gridRows) * 100; // As percentage of total grid height
                   return (
                     <React.Fragment key={idx}>
                       {/* Horizontal line from Y-axis to dot */}
@@ -932,25 +1116,30 @@ const StatisticsTab: React.FC = () => {
                 })}
                 
                 {activeChart === 'smoothedWpm' && selectedSession && smoothedWpmData.map((data, idx) => {
-                  const yPosition = (idx + 1) * 2; // Each point on a grid line (2% intervals)
+                  // Position data points to align with horizontal grid lines
+                  const yPosition = ((idx + 1) / gridRows) * 100; // As percentage of total grid height
                   return (
                     <React.Fragment key={idx}>
                       {/* Horizontal line from Y-axis to dot */}
                       <DataLine width={data.width} y={yPosition} />
                       {/* Data point dot */}
-                      <Tooltip title={`Keypress ${data.keypressNumber}: ${data.wpm.toFixed(1)} WPM`}>
+                      <Tooltip title={`Keypress ${data.keypressNumber}: ${data.wpm.toFixed(1)} WPM${data.isIncorrect ? ' (Incorrect)' : ''}`}>
                         <DataPoint x={data.width} y={yPosition} color={data.color} />
                       </Tooltip>
+                      {/* Error cross for incorrect keypresses */}
+                      {data.isIncorrect && (
+                        <ErrorCross x={data.width} y={yPosition} />
+                      )}
                     </React.Fragment>
                   );
                 })}
-              </DataPointsContainer>
+                </DataPointsContainer>
 
-              {/* Dashed vertical line from triangle for average WPM */}
-              {activeChart === 'smoothedWpm' && selectedSession && (
+                {/* Dashed vertical line from triangle for average WPM - extends full grid height */}
+                {activeChart === 'smoothedWpm' && selectedSession && (
                 <svg 
                   width="100%" 
-                  height="100%" 
+                  height="100%"
                   style={{ position: 'absolute', top: 0, left: 0, zIndex: 15 }}
                 >
                   <line
@@ -958,19 +1147,19 @@ const StatisticsTab: React.FC = () => {
                     y1="0"
                     x2={`${(selectedSession.wpm / 250) * 100}%`}
                     y2="100%"
-                    stroke={getWpmColor(selectedSession.wpm)}
+                    stroke={getGradientColor(selectedSession.wpm)}
                     strokeWidth="2"
                     strokeDasharray="4 4"
                     opacity="0.8"
                   />
                 </svg>
-              )}
-              
-              {/* Dashed vertical line for WPM distribution average */}
-              {activeChart === 'wpmDistribution' && averages && (
+                )}
+                
+                {/* Dashed vertical line for WPM distribution average - extends full grid height */}
+                {activeChart === 'wpmDistribution' && averages && (
                 <svg 
                   width="100%" 
-                  height="100%" 
+                  height="100%"
                   style={{ position: 'absolute', top: 0, left: 0, zIndex: 15 }}
                 >
                   <line
@@ -978,17 +1167,41 @@ const StatisticsTab: React.FC = () => {
                     y1="0"
                     x2={`${(averages.avgWPM / 250) * 100}%`}
                     y2="100%"
-                    stroke={getWpmColor(averages.avgWPM)}
+                    stroke={getGradientColor(averages.avgWPM)}
                     strokeWidth="2"
                     strokeDasharray="4 4"
                     opacity="0.8"
                   />
                 </svg>
-              )}
+                )}
+                </Box>
+              </Box>
             </ChartScrollContainer>
 
-            {/* X-axis */}
-            <XAxis>
+          </ChartScrollBox>
+
+          {/* X-axis - outside scrollbox */}
+          <Box sx={{ 
+            position: 'absolute',
+            left: '12.5%', // Align with ChartScrollBox
+            width: '75%', // Same as ChartScrollBox
+            //marginTop: '16px', // Test adjustment
+            top: '82%', // TESTING 82% for proper alignment?? TESTING1 calc(80% + 20px) for proper alignment
+            height: '30px',
+            '@media (max-width: 960px)': {
+              left: '7.5%',
+              width: '85%',
+            }
+          }}>
+            <Box sx={{ 
+              position: 'absolute',
+              left: `${yAxisLabelWidth}px`,
+              right: `${scrollbarWidth}px`, // Account for scrollbar
+              width: `calc(100% - ${yAxisLabelWidth}px - ${scrollbarWidth}px)`,
+              height: '100%',
+              display: 'flex',
+              alignItems: 'flex-start',
+            }}>
               {[0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250].map((value, index) => (
                 <Typography 
                   key={value} 
@@ -1008,28 +1221,31 @@ const StatisticsTab: React.FC = () => {
                 position: 'absolute',
                 left: '100%', // At right edge
                 marginLeft: '20px', // Space after 250
-                marginTop: '6px', // Manual adjustment for better alignment
-                top: '0', // Align with X-axis numbers
                 fontSize: '0.8rem',
                 fontWeight: 600
               }}>
                 WPM
               </Typography>
-            </XAxis>
-          </ChartContent>
+            </Box>
+          </Box>
 
           {/* Gradient bar container - same width as grid */}
           <Box sx={{ 
             position: 'relative',
-            width: '75%', // Same as ChartContent width
-            marginTop: '25px', // Lowered by 25px to align with grid
+            width: '75%', // Same as ChartScrollBox width
+            marginTop: '40px', // Increased to make room for X-axis labels
+            marginLeft: 'auto',
+            marginRight: 'auto',
             '@media (max-width: 960px)': {
               width: '85%',
             }
           }}>
             {/* Gradient bar */}
             <Box sx={{ 
-              width: '100%',
+              position: 'absolute',
+              left: `${yAxisLabelWidth}px`,
+              right: `${scrollbarWidth}px`, // Account for scrollbar
+              width: `calc(100% - ${yAxisLabelWidth}px - ${scrollbarWidth}px)`,
               height: '10px',
               background: 'linear-gradient(to right, #2196F3 0%, #4CAF50 25%, #FFEB3B 50%, #FF9800 75%, #F44336 100%)',
               borderRadius: 1,
@@ -1041,16 +1257,16 @@ const StatisticsTab: React.FC = () => {
                 <Box
                   sx={{
                     position: 'absolute',
-                    left: `${(selectedSession.wpm / 250) * 100}%`, // Position as percentage
-                    bottom: '100%', // At bottom edge of gradient (top of triangle at grid bottom)
-                    marginBottom: '20px', // Move up to align with grid bottom
+                    left: `calc(${yAxisLabelWidth}px + (100% - ${yAxisLabelWidth}px - ${scrollbarWidth}px) * ${selectedSession.wpm / 250})`, // Adjusted for grid alignment
+                    bottom: '100%', // At bottom edge of gradient
+                    marginBottom: '30px', // TESTING Lifted by 30px for alignment
                     transform: 'translateX(-50%)',
                     width: 0,
                     height: 0,
-                    borderLeft: '8px solid transparent',
-                    borderRight: '8px solid transparent',
-                    borderBottom: '12px solid', // Points upward (flipped)
-                    borderBottomColor: getWpmColor(selectedSession.wpm),
+                    borderLeft: '6px solid transparent',
+                    borderRight: '6px solid transparent',
+                    borderBottom: '10px solid', // Points upward (flipped)
+                    borderBottomColor: getGradientColor(selectedSession.wpm),
                     zIndex: 25,
                   }}
                 />
@@ -1063,16 +1279,16 @@ const StatisticsTab: React.FC = () => {
                 <Box
                   sx={{
                     position: 'absolute',
-                    left: `${(averages.avgWPM / 250) * 100}%`, // Position as percentage
-                    bottom: '100%', // At bottom edge of gradient (top of triangle at grid bottom)
-                    marginBottom: '20px', // Move up to align with grid bottom
+                    left: `calc(${yAxisLabelWidth}px + (100% - ${yAxisLabelWidth}px - ${scrollbarWidth}px) * ${averages.avgWPM / 250})`, // Adjusted for grid alignment
+                    bottom: '100%', // At bottom edge of gradient
+                    marginBottom: '30px', // TESTING Lifted by 30px for alignment
                     transform: 'translateX(-50%)',
                     width: 0,
                     height: 0,
-                    borderLeft: '8px solid transparent',
-                    borderRight: '8px solid transparent',
-                    borderBottom: '12px solid', // Points upward (flipped)
-                    borderBottomColor: getWpmColor(averages.avgWPM),
+                    borderLeft: '6px solid transparent',
+                    borderRight: '6px solid transparent',
+                    borderBottom: '10px solid', // Points upward (flipped)
+                    borderBottomColor: getGradientColor(averages.avgWPM),
                     zIndex: 25,
                   }}
                 />
