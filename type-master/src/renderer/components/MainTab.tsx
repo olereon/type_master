@@ -62,8 +62,8 @@ const StatRow = styled(Box)(({ theme }) => ({
 }));
 
 const MainTab: React.FC = () => {
-  const { currentSession, startSession, updateSession, endSession, clearCurrentSession, textSources, activeTextSourceId, isTypingFieldActive, setTypingFieldActive, settings, getNextSessionId } = useAppStore();
-  const [mode, setMode] = useState<'time' | 'characters'>('time');
+  const { currentSession, startSession, updateSession, endSession, clearCurrentSession, textSources, activeTextSourceId, isTypingFieldActive, setTypingFieldActive, settings, getNextSessionId, updateTextSource } = useAppStore();
+  const [mode, setMode] = useState<'time' | 'characters' | 'free'>('time');
   const [targetValue, setTargetValue] = useState(30);
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -73,6 +73,7 @@ const MainTab: React.FC = () => {
   const [hasStartedTyping, setHasStartedTyping] = useState(false);
   const [showCompletionOverlay, setShowCompletionOverlay] = useState(false);
   const [isMouseInsideTypingField, setIsMouseInsideTypingField] = useState(false);
+  const [showSaveMessage, setShowSaveMessage] = useState(false);
   const [completedSessionStats, setCompletedSessionStats] = useState<{
     time: number;
     characters: number;
@@ -153,15 +154,30 @@ const MainTab: React.FC = () => {
   }, [isRunning, hasStartedTyping, mode, targetValue, handleStop]);
 
   const handleStart = () => {
+    // Load checkpoint if in free mode and checkpoint exists
+    if (mode === 'free' && activeTextSourceId) {
+      const activeSource = textSources.find(source => source.id === activeTextSourceId);
+      if (activeSource?.freeCheckpoint) {
+        setCurrentIndex(activeSource.freeCheckpoint.position);
+        setErrors(new Set(activeSource.freeCheckpoint.errors));
+        setTypedText(activeText.substring(0, activeSource.freeCheckpoint.position));
+        setProgress((activeSource.freeCheckpoint.position / activeText.length) * 100);
+      }
+    }
+
     const newSession: TypingSession = {
       id: 'temp-' + Date.now(), // Temporary ID during typing
       startTime: new Date(),
       mode,
       targetValue,
       text: activeText,
-      typedChars: 0,
-      correctChars: 0,
-      incorrectChars: 0,
+      typedChars: mode === 'free' && activeTextSourceId ? 
+        (textSources.find(source => source.id === activeTextSourceId)?.freeCheckpoint?.position || 0) : 0,
+      correctChars: mode === 'free' && activeTextSourceId ? 
+        (textSources.find(source => source.id === activeTextSourceId)?.freeCheckpoint?.position || 0) - 
+        (textSources.find(source => source.id === activeTextSourceId)?.freeCheckpoint?.errors.length || 0) : 0,
+      incorrectChars: mode === 'free' && activeTextSourceId ? 
+        (textSources.find(source => source.id === activeTextSourceId)?.freeCheckpoint?.errors.length || 0) : 0,
       wpm: 0,
       accuracy: 100,
       keyPresses: [],
@@ -169,10 +185,12 @@ const MainTab: React.FC = () => {
     
     startSession(newSession);
     setIsRunning(true);
-    setProgress(0);
-    setTypedText('');
-    setCurrentIndex(0);
-    setErrors(new Set());
+    if (mode !== 'free' || !activeTextSourceId || !textSources.find(source => source.id === activeTextSourceId)?.freeCheckpoint) {
+      setProgress(0);
+      setTypedText('');
+      setCurrentIndex(0);
+      setErrors(new Set());
+    }
     setHasStartedTyping(false);
     setTypingFieldActive(true);
     setShowCompletionOverlay(false);
@@ -234,8 +252,72 @@ const MainTab: React.FC = () => {
       if (currentIndex + 1 >= targetValue) {
         handleStop();
       }
+    } else if (mode === 'free') {
+      const newProgress = ((currentIndex + 1) / activeText.length) * 100;
+      setProgress(Math.min(newProgress, 100));
+      
+      if (currentIndex + 1 >= activeText.length) {
+        handleStop();
+      }
     }
   };
+
+  // Checkpoint functionality for free mode
+  const handleSaveCheckpoint = useCallback(() => {
+    if (mode === 'free' && activeTextSourceId && isRunning) {
+      const checkpoint = {
+        position: currentIndex,
+        errors: Array.from(errors),
+        timestamp: new Date(),
+      };
+      updateTextSource(activeTextSourceId, { freeCheckpoint: checkpoint });
+      
+      // Show save confirmation message
+      setShowSaveMessage(true);
+      setTimeout(() => setShowSaveMessage(false), 3000);
+    }
+  }, [mode, activeTextSourceId, isRunning, currentIndex, errors, updateTextSource]);
+
+  const handleLoadCheckpoint = useCallback(() => {
+    if (mode === 'free' && activeTextSourceId && isRunning) {
+      const activeSource = textSources.find(source => source.id === activeTextSourceId);
+      if (activeSource?.freeCheckpoint) {
+        setCurrentIndex(activeSource.freeCheckpoint.position);
+        setErrors(new Set(activeSource.freeCheckpoint.errors));
+        setTypedText(activeText.substring(0, activeSource.freeCheckpoint.position));
+        setProgress((activeSource.freeCheckpoint.position / activeText.length) * 100);
+        
+        // Update current session to reflect checkpoint state
+        if (currentSession) {
+          const updatedSession: TypingSession = {
+            ...currentSession,
+            typedChars: activeSource.freeCheckpoint.position,
+            correctChars: activeSource.freeCheckpoint.position - activeSource.freeCheckpoint.errors.length,
+            incorrectChars: activeSource.freeCheckpoint.errors.length,
+          };
+          updateSession(updatedSession);
+        }
+      }
+    }
+  }, [mode, activeTextSourceId, textSources, activeText, isRunning, currentSession, updateSession]);
+
+  // Keyboard event handler for Ctrl and Alt keys
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (mode === 'free' && isTypingFieldActive) {
+        if (event.ctrlKey && !event.repeat) {
+          event.preventDefault();
+          handleSaveCheckpoint();
+        } else if (event.altKey && !event.repeat) {
+          event.preventDefault();
+          handleLoadCheckpoint();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [mode, isTypingFieldActive, handleSaveCheckpoint, handleLoadCheckpoint]);
 
   return (
     <MainContainer>
@@ -245,6 +327,7 @@ const MainTab: React.FC = () => {
         targetValue={targetValue}
         onTargetValueChange={setTargetValue}
         isRunning={isRunning}
+        showSaveMessage={showSaveMessage}
       />
       
       <ContentArea>

@@ -2,7 +2,7 @@ export interface TypingSession {
   id: string;
   startTime: Date;
   endTime?: Date;
-  mode: 'time' | 'characters';
+  mode: 'time' | 'characters' | 'free';
   targetValue: number; // seconds or character count
   text: string;
   typedChars: number;
@@ -39,6 +39,11 @@ export interface TextSource {
   content: string;
   type: 'custom' | 'generated' | 'imported';
   createdAt: Date;
+  freeCheckpoint?: {
+    position: number;
+    errors: number[];
+    timestamp: Date;
+  };
 }
 
 export interface SessionMetrics {

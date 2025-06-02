@@ -27,6 +27,7 @@ interface AppState {
   updateSettings: (settings: Partial<UserSettings>) => void;
   addTextSource: (source: TextSource) => void;
   removeTextSource: (id: string) => void;
+  updateTextSource: (id: string, updates: Partial<TextSource>) => void;
   setActiveTextSource: (id: string) => void;
   setTypingFieldActive: (active: boolean) => void;
   getNextSessionId: () => string;
@@ -87,6 +88,12 @@ export const useAppStore = create<AppState>()(
       removeTextSource: (id) => set((state) => ({
         textSources: state.textSources.filter(s => s.id !== id),
         activeTextSourceId: state.activeTextSourceId === id ? 'default' : state.activeTextSourceId,
+      })),
+      
+      updateTextSource: (id, updates) => set((state) => ({
+        textSources: state.textSources.map(source => 
+          source.id === id ? { ...source, ...updates } : source
+        ),
       })),
       
       setActiveTextSource: (id) => set({ activeTextSourceId: id }),

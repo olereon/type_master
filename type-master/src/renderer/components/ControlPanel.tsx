@@ -1,6 +1,7 @@
 import React from 'react';
-import { Box, ToggleButton, ToggleButtonGroup, Button, Paper } from '@mui/material';
+import { Box, ToggleButton, ToggleButtonGroup, Button, Paper, Tooltip, Typography, Fade } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { useAppStore } from '../store/useAppStore';
 
 const PanelContainer = styled(Paper)(({ theme }) => ({
   width: 180,
@@ -39,13 +40,32 @@ const ValueButton = styled(Button)(({ theme }) => ({
   fontWeight: 600,
 }));
 
+const FreeButton = styled(Button)(({ theme }) => ({
+  width: '100%',
+  minWidth: 0,
+  padding: theme.spacing(1.5),
+  fontSize: '1.2rem',
+  fontWeight: 700,
+  marginTop: theme.spacing(1),
+  background: 'linear-gradient(45deg, #FF6B6B 30%, #4ECDC4 90%)',
+  color: 'white',
+  '&:hover': {
+    background: 'linear-gradient(45deg, #FF8E8E 30%, #5FDAD0 90%)',
+  },
+  '&:disabled': {
+    background: theme.palette.action.disabledBackground,
+    color: theme.palette.action.disabled,
+  },
+}));
+
 
 interface ControlPanelProps {
-  mode: 'time' | 'characters';
-  onModeChange: (mode: 'time' | 'characters') => void;
+  mode: 'time' | 'characters' | 'free';
+  onModeChange: (mode: 'time' | 'characters' | 'free') => void;
   targetValue: number;
   onTargetValueChange: (value: number) => void;
   isRunning: boolean;
+  showSaveMessage?: boolean;
 }
 
 const ControlPanel: React.FC<ControlPanelProps> = ({
@@ -54,9 +74,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   targetValue,
   onTargetValueChange,
   isRunning,
+  showSaveMessage = false,
 }) => {
-  const timeValues = [5, 10, 20, 30, 60];
-  const charValues = [50, 100, 200, 300, 500];
+  const timeValues = [5, 10, 20, 30, 60, 120, 300];
+  const charValues = [50, 100, 200, 300, 500, 1000, 2500];
+
+  const { textSources, activeTextSourceId } = useAppStore();
+  const activeTextSource = textSources.find(source => source.id === activeTextSourceId);
+  const isFreeEligible = activeTextSource && activeTextSource.content.length >= 5000;
 
   const handleModeChange = (newMode: 'time' | 'characters') => {
     if (newMode && !isRunning) {
@@ -66,7 +91,14 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
     }
   };
 
-  const values = mode === 'time' ? timeValues : charValues;
+  const handleFreeMode = () => {
+    if (isFreeEligible && !isRunning) {
+      onModeChange('free');
+      onTargetValueChange(0); // No target for free mode
+    }
+  };
+
+  const values = mode === 'time' ? timeValues : mode === 'characters' ? charValues : [];
 
   return (
     <PanelContainer elevation={0}>
@@ -79,10 +111,10 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           fullWidth
         >
           <ModeToggle value="time" disabled={isRunning}>
-            SEC
+            TIME
           </ModeToggle>
           <ModeToggle value="characters" disabled={isRunning}>
-            NUM
+            CHAR
           </ModeToggle>
         </ToggleButtonGroup>
       </ButtonGroup>
@@ -99,7 +131,38 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
             {value}
           </ValueButton>
         ))}
+        
+        <Tooltip 
+          title={isFreeEligible ? "Free typing mode for texts with 5000+ characters" : "Text must have at least 5000 characters to enable Free mode"}
+          placement="right"
+        >
+          <span>
+            <FreeButton
+              variant="contained"
+              onClick={handleFreeMode}
+              disabled={isRunning || !isFreeEligible}
+            >
+              FREE
+            </FreeButton>
+          </span>
+        </Tooltip>
       </ButtonGroup>
+      
+      {/* Save confirmation message */}
+      <Fade in={showSaveMessage}>
+        <Typography 
+          variant="caption" 
+          sx={{ 
+            textAlign: 'center',
+            color: 'success.main',
+            fontWeight: 600,
+            marginTop: 1,
+            minHeight: 20
+          }}
+        >
+          Saving complete
+        </Typography>
+      </Fade>
     </PanelContainer>
   );
 };

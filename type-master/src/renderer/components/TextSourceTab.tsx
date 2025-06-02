@@ -15,6 +15,7 @@ import {
   DialogActions,
   Paper,
   Chip,
+  LinearProgress,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -23,6 +24,8 @@ import AddIcon from '@mui/icons-material/Add';
 import FileUploadIcon from '@mui/icons-material/FileUpload';
 import RadioButtonCheckedIcon from '@mui/icons-material/RadioButtonChecked';
 import RadioButtonUncheckedIcon from '@mui/icons-material/RadioButtonUnchecked';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useAppStore } from '../store/useAppStore';
 import { TextSource } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
@@ -67,8 +70,21 @@ const TextPreview = styled(Typography)(({ theme }) => ({
   maxWidth: '400px',
 }));
 
+const ProgressContainer = styled(Box)(({ theme }) => ({
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: theme.spacing(0.5),
+  marginLeft: theme.spacing(0.5),
+}));
+
+const ProgressBar = styled(LinearProgress)(() => ({
+  height: 6,
+  borderRadius: 3,
+  width: 100,
+}));
+
 const TextSourceTab: React.FC = () => {
-  const { textSources, activeTextSourceId, addTextSource, removeTextSource, setActiveTextSource } = useAppStore();
+  const { textSources, activeTextSourceId, addTextSource, removeTextSource, updateTextSource, setActiveTextSource } = useAppStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSource, setEditingSource] = useState<TextSource | null>(null);
   const [formData, setFormData] = useState({
@@ -248,6 +264,15 @@ const TextSourceTab: React.FC = () => {
                           : 'default'
                       }
                     />
+                    {source.content.length >= 5000 && (
+                      <Chip
+                        icon={<LockOpenIcon />}
+                        label="free"
+                        size="small"
+                        color="warning"
+                        variant="outlined"
+                      />
+                    )}
                   </Box>
                 }
                 secondary={
@@ -255,6 +280,37 @@ const TextSourceTab: React.FC = () => {
                     <TextPreview>{source.content}</TextPreview>
                     <Typography variant="caption" color="text.secondary">
                       {source.content.length} characters • {Math.ceil(source.content.split(/\s+/).length)} words
+                      {source.freeCheckpoint && (
+                        <>
+                          {" • "}
+                          <ProgressContainer component="span">
+                            <Typography variant="caption" color="text.secondary" component="span">
+                              Progress: {Math.round((source.freeCheckpoint.position / source.content.length) * 100)}% Free type
+                            </Typography>
+                            <ProgressBar
+                              variant="determinate"
+                              value={(source.freeCheckpoint.position / source.content.length) * 100}
+                              color={
+                                (source.freeCheckpoint.position / source.content.length) * 100 < 33
+                                  ? 'error'
+                                  : (source.freeCheckpoint.position / source.content.length) * 100 < 66
+                                  ? 'warning'
+                                  : 'success'
+                              }
+                            />
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                updateTextSource(source.id, { freeCheckpoint: undefined });
+                              }}
+                              sx={{ ml: 0.5, padding: 0.2 }}
+                            >
+                              <ClearIcon sx={{ fontSize: 12 }} />
+                            </IconButton>
+                          </ProgressContainer>
+                        </>
+                      )}
                     </Typography>
                   </Box>
                 }
