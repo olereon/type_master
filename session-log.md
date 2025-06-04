@@ -402,4 +402,293 @@ showWhitespace
 
 ---
 
-**Session End**: (Ongoing)
+---
+
+### 17. Settings Slider Value Display Enhancement
+**Time**: 2025-06-04 15:15:00
+**User Request**: Move slider values from floating labels over knobs to the left description boxes to avoid overlap
+
+**Issue Analysis**:
+- Slider values were displayed as floating tooltips over slider knobs
+- Multiple sliders caused visual overlap and clutter
+- User wanted cleaner display with values shown in left label boxes
+
+**Solution Implemented**:
+- Modified all 4 sliders in Settings tab (Sessions, K0, K1, K2 coefficients)
+- Changed slider labels to include current values: "K0 Coefficient: {value}"
+- Set `valueLabelDisplay="off"` to remove floating tooltips
+- Values now display clearly in left description boxes
+
+**Files Modified**:
+- `src/renderer/components/SettingsTab.tsx` - Updated slider value display logic
+
+**Result**: Clean, readable slider interface without visual overlap
+
+---
+
+### 18. Statistics Sessions List Scrollbar Implementation
+**Time**: 2025-06-04 15:20:00
+**User Report**: Sessions list in Statistics window lacks scrollbar, causing visual overlapping
+
+**Issue Analysis**:
+- Sessions list was overflowing beyond container bounds
+- No visible scrollbar despite content overflow
+- Session entries were overlapping and bottom sessions were cut off
+- Root cause: Parent containers had `overflow: 'hidden'` blocking child scrollbars
+
+**Technical Investigation**:
+1. **Initial Fix Attempt**: Enhanced `SessionsList` styling with custom scrollbar
+2. **Issue Persisted**: Scrollbar still not appearing
+3. **Root Cause Discovery**: `Container` component had `overflow: 'hidden'`
+4. **Additional Issues**: Layout hierarchy preventing proper flex behavior
+
+**Solution Implemented**:
+1. **Fixed Container overflow**: Changed from `overflow: 'hidden'` to `overflow: 'visible'`
+2. **Enhanced Paper layout**: 
+   - Removed blocking `overflow: 'hidden'`
+   - Added `minHeight: 0` for proper flex shrinking
+   - Added `flexShrink: 0` to header to prevent compression
+3. **Improved SessionsList**:
+   - Added `minHeight: 0` for flex item shrinking behavior
+   - Used `overflowY: 'auto'` and `overflowX: 'hidden'`
+   - Implemented custom scrollbar styling (8px width, gray theme)
+4. **Enhanced LeftSection**: Added proper height constraints
+5. **Fixed SessionRow**: Added `flexShrink: 0` to prevent row compression
+6. **Fixed MainLayout**: Added `overflow: 'visible'`
+
+**Technical Details**:
+- **Key CSS Property**: `minHeight: 0` allows flex items to shrink below content size
+- **Scrollbar Styling**: Custom webkit scrollbar with hover effects
+- **Layout Fix**: Removed all blocking `overflow: 'hidden'` from parent containers
+
+**Files Modified**:
+- `src/renderer/components/StatisticsTab.tsx` - Fixed scrolling layout hierarchy
+
+**Result**: 
+✅ Scrollbar appears when sessions overflow container height
+✅ All sessions accessible through smooth scrolling  
+✅ No visual overlapping or cut-off content
+✅ Custom styled scrollbar with proper visibility
+
+---
+
+---
+
+### 19. Advanced Line-Based Typing Performance System
+**Time**: 2025-06-04 15:45:00
+**User Request**: Replace character-based windowing with line-based system using "invisible" padding
+
+**Issue Analysis**:
+- Character-based window caused jarring text jumps and word splitting
+- Cursor movement was unnatural (words jumping between lines)
+- Performance improved but typing experience degraded significantly
+- User wanted return to normal line-by-line cursor movement
+
+**User's Proposed Solution**:
+- Calculate max characters per line based on container width and font size
+- Process text into padded lines where incomplete lines are filled with invisible padding characters
+- Only complete words (+ punctuation) fit per line, incomplete words go to next line
+- Padding characters always have background color (transparent/invisible)
+- Cursor skips over padding automatically
+- Padding characters ignored in WPM and performance stats
+- Maximum 8 lines or 512 characters displayed simultaneously
+- When cursor reaches 2nd-to-last line, window shifts up by 1 line
+
+**Technical Implementation**:
+
+1. **Character Width Calculation**:
+   - Dynamic measurement using temporary DOM element
+   - Based on current font family and size
+   - Accounts for container width and padding
+
+2. **Text Preprocessing**:
+   - Words extracted with regex: `/\S+\s*/g`
+   - Lines filled respecting word boundaries
+   - Padding added with middle dot character (`·`)
+   - Export utility function for reuse
+
+3. **Window Management**:
+   - Line-based sliding window (max 8 lines)
+   - Transition when cursor reaches 2nd-to-last visible line
+   - Smooth shifting up by 1 line
+
+4. **Cursor Handling**:
+   - Automatic padding character skipping in MainTab
+   - Progress calculation excludes padding characters
+   - Status tracking only for real characters
+
+5. **Performance Optimizations**:
+   - Consistent DOM element count (≤512 chars)
+   - Line-based rendering reduces reflow
+   - Padding characters styled as transparent
+
+**Files Modified**:
+- `src/renderer/components/TypingArea.tsx` - Complete rewrite with line-based system
+- `src/renderer/components/MainTab.tsx` - Added padding character handling
+
+**Technical Details**:
+```typescript
+// Constants and utilities
+export const TYPING_PADDING_CHAR = '·';
+export const processTextWithPadding = (text: string, charsPerLine: number): string
+
+// Key improvements
+- calculateCharsPerLine(): Measures actual character width
+- processedLines: Pre-computed padded lines
+- textWindow: Line-based window with smooth transitions
+- Padding skip logic: while (activeText[nextIndex] === PADDING_CHAR) nextIndex++
+```
+
+**Result**: 
+✅ Natural typing experience with proper line-by-line cursor movement
+✅ No more jarring word jumps or text shifting
+✅ Maintained performance benefits (≤512 characters displayed)
+✅ Automatic padding character skipping
+✅ Accurate WPM/stats (padding excluded)
+✅ Smooth line transitions when reaching window edge
+
+---
+
+---
+
+### 20. Typing Container Width Fix for Large Font Sizes
+**Time**: 2025-06-04 16:00:00
+**User Report**: Container window expanding beyond screen edge with large font sizes (>35px)
+
+**Issue Analysis**:
+- Characters per line calculation: `Width_typing_area / character_size`
+- Problem: Container was expanding to fit calculated line width instead of staying fixed
+- Large fonts caused longer calculated lines, pushing container beyond screen bounds
+- Container should have fixed width regardless of font size
+
+**Root Cause**:
+- `TextContainer` had `flex: 1` but no width constraints
+- `TextDisplay` and line Box components allowed content overflow
+- Character calculation was exact but didn't account for rendering variations
+
+**Solution Implemented**:
+
+1. **Fixed Container Constraints**:
+   ```typescript
+   TextContainer: {
+     maxWidth: '100%',        // Prevent expansion beyond container
+     width: '100%',           // Take full available width but not more
+     boxSizing: 'border-box', // Include padding in width calculation
+   }
+   ```
+
+2. **Constrained Text Display**:
+   ```typescript
+   TextDisplay: {
+     maxWidth: '100%',        // Prevent text from expanding beyond container
+     overflow: 'hidden',      // Hide any potential overflow
+     wordWrap: 'break-word',  // Break long words if needed
+   }
+   ```
+
+3. **Conservative Character Calculation**:
+   ```typescript
+   // Be more conservative - reduce by 10% to account for variations
+   const conservativeCharsPerLine = Math.floor(charsPerLine * 0.9);
+   ```
+
+4. **Line Overflow Protection**:
+   ```typescript
+   <Box sx={{ 
+     maxWidth: '100%',
+     overflow: 'hidden',
+     display: 'block'
+   }}>
+   ```
+
+**Technical Details**:
+- Container width now stays constant regardless of font size
+- Character calculation accounts for 10% safety margin
+- Multiple overflow protection layers prevent visual expansion
+- Font size only affects characters per line, not container size
+
+**Files Modified**:
+- `src/renderer/components/TypingArea.tsx` - Fixed container width constraints
+
+**Result**: 
+✅ Container width stays fixed regardless of font size
+✅ Large fonts (35px+) no longer cause screen overflow
+✅ Typing area remains properly constrained within screen bounds
+✅ Character calculation formula works correctly: Width ÷ CharSize × 0.9 safety margin
+
+---
+
+---
+
+### 22. Responsive Typing Area Width Implementation
+**Time**: 2025-06-04 17:00:00
+**User Feedback**: Fixed 800px width doesn't adapt to different screen sizes, should use percentage-based approach
+
+**Issue Analysis**:
+- Fixed 800px width doesn't scale across different monitor configurations
+- Wastes space on large monitors, too wide for smaller screens
+- User suggested: Use 90% of window width with maximum constraint of 1600px
+- Better solution: `min(90% of window, 1600px)`
+
+**Solution Implemented**:
+
+1. **Responsive Width Calculation**:
+   ```typescript
+   const MAX_ABSOLUTE_WIDTH = 1600;     // Maximum width constraint 
+   const WIDTH_PERCENTAGE = 0.9;        // Use 90% of available width
+   
+   const optimalWidth = Math.min(
+     window.innerWidth * WIDTH_PERCENTAGE, 
+     MAX_ABSOLUTE_WIDTH
+   );
+   ```
+
+2. **Dynamic Width Management**:
+   - State tracking: `useState` to track current optimal width
+   - Window resize listener: Updates width on screen changes
+   - Real-time character calculation based on current width
+
+3. **Responsive Container**:
+   ```typescript
+   const TypingWrapper = styled(Box)({
+     display: 'flex',
+     justifyContent: 'center',
+     width: '100%',
+   });
+   
+   <TypingWrapper style={{ maxWidth: `${optimalWidth}px` }}>
+   ```
+
+4. **Adaptive Character Calculation**:
+   ```typescript
+   // Formula: (Responsive_Width - Padding) / Max_Char_Width
+   const availableWidth = optimalWidth - 48;
+   const charsPerLine = Math.floor(availableWidth / maxCharWidth);
+   ```
+
+**Technical Benefits**:
+- **Small screens** (mobile): Uses 90% of available space efficiently
+- **Standard monitors** (1920px): Uses ~1728px (90% × 1920px)
+- **Ultra-wide monitors** (3440px): Capped at 1600px for readability
+- **Window resize**: Automatically adapts without page refresh
+
+**Formula Implementation**:
+```
+Typing_Area_Width = min(Window_Width × 0.9, 1600px)
+Characters_Per_Line = (Typing_Area_Width - 48px) / Max_Char_Width
+```
+
+**Files Modified**:
+- `src/renderer/components/TypingArea.tsx` - Implemented responsive width system
+
+**Result**: 
+✅ Responsive typing area adapts to any screen size
+✅ Uses 90% of window width efficiently  
+✅ Maximum 1600px width prevents excessive line length
+✅ Automatic recalculation on window resize
+✅ Optimal character count for each screen configuration
+
+---
+
+**Session Status**: Complete responsive typing system
+**Total Features Completed**: All features + performance + responsive design

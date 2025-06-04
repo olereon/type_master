@@ -51,7 +51,7 @@ const Container = styled(Box)(({ theme }) => ({
   paddingTop: 0, // Remove top padding to allow manual positioning
   paddingBottom: theme.spacing(1), // Extended bottom padding by 15px
   height: '100%',
-  overflow: 'hidden',
+  overflow: 'visible', // Allow child components to show scrollbars
   display: 'flex',
   flexDirection: 'column',
 }));
@@ -62,6 +62,7 @@ const MainLayout = styled(Box)<{ isSmallScreen?: boolean }>(({ isSmallScreen }) 
   height: '100%',
   flexDirection: isSmallScreen ? 'column' : 'row',
   marginTop: '-10px', // Lift all content up by 10px
+  overflow: 'visible', // Allow child scrollbars
 }));
 
 const LeftSection = styled(Box)(({ theme }) => ({
@@ -69,6 +70,8 @@ const LeftSection = styled(Box)(({ theme }) => ({
   display: 'flex',
   flexDirection: 'column',
   gap: theme.spacing(2),
+  minHeight: 0, // Important: allows flex items to shrink
+  height: '100%', // Take full height of parent
   [theme.breakpoints.down('lg')]: {
     width: '100%',
   },
@@ -97,10 +100,27 @@ const RightSection = styled(Box)(({ theme }) => ({
 
 const SessionsList = styled(Box)(({ theme }) => ({
   flex: 1,
-  overflow: 'auto',
+  minHeight: 0, // Important: allows flex item to shrink below content size
+  overflowY: 'auto',
+  overflowX: 'hidden',
   display: 'flex',
   flexDirection: 'column',
   gap: theme.spacing(1),
+  // Ensure scrollbar is visible
+  '&::-webkit-scrollbar': {
+    width: '8px',
+  },
+  '&::-webkit-scrollbar-track': {
+    backgroundColor: 'rgba(0, 0, 0, 0.1)',
+    borderRadius: '4px',
+  },
+  '&::-webkit-scrollbar-thumb': {
+    backgroundColor: 'rgba(128, 128, 128, 0.5)',
+    borderRadius: '4px',
+    '&:hover': {
+      backgroundColor: 'rgba(128, 128, 128, 0.7)',
+    },
+  },
 }));
 
 const SessionRow = styled(Card)<{ selected?: boolean; scoreColor?: string }>(({ theme, selected, scoreColor }) => ({
@@ -108,6 +128,7 @@ const SessionRow = styled(Card)<{ selected?: boolean; scoreColor?: string }>(({ 
   borderLeft: `4px solid ${scoreColor || theme.palette.divider}`,
   backgroundColor: selected ? theme.palette.action.selected : theme.palette.background.paper,
   padding: theme.spacing(1.5),
+  flexShrink: 0, // Prevent rows from shrinking
   '&:hover': {
     backgroundColor: theme.palette.action.hover,
   },
@@ -667,8 +688,8 @@ const StatisticsTab: React.FC = () => {
   );
 
   const renderSessionsList = () => (
-    <Paper sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Paper sx={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <Box>
           <Typography variant="h6">Sessions</Typography>
           {selectedSession && (

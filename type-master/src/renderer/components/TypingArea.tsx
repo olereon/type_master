@@ -1,7 +1,13 @@
-import React, { useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo, useCallback, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAppStore } from '../store/useAppStore';
+
+const TypingWrapper = styled(Box)({
+  display: 'flex',
+  justifyContent: 'center',
+  width: '100%',
+});
 
 const TextContainer = styled(Box)(({ theme }) => ({
   flex: 1,
@@ -12,6 +18,9 @@ const TextContainer = styled(Box)(({ theme }) => ({
   position: 'relative',
   cursor: 'text',
   userSelect: 'none',
+  width: '100%', // Will be constrained by parent
+  boxSizing: 'border-box', // Include padding in width calculation
+  margin: '0 auto', // Center the container when it's less than full width
   '&:focus': {
     outline: 'none',
   },
@@ -45,7 +54,11 @@ const TextDisplay = styled(Typography)<{ customFont?: string; customSize?: numbe
     fontWeight: customStyle === 'bold' ? 600 : 400,
     lineHeight: 1.8,
     letterSpacing: '0.05em',
-    whiteSpace: 'pre-wrap',
+    whiteSpace: 'pre', // Use 'pre' to preserve exact spacing and prevent wrapping
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+    display: 'block',
   })
 );
 
@@ -137,6 +150,38 @@ const CursorOverlay = styled('span')<{
   })
 );
 
+export const TYPING_PADDING_CHAR = '·'; // Export for use in MainTab
+
+// Utility function to process text with padding
+export const processTextWithPadding = (text: string, charsPerLine: number): string => {
+  const lines: string[] = [];
+  const words = text.match(/\S+\s*/g) || [];
+  
+  let currentLine = '';
+  let currentLineLength = 0;
+  
+  for (const word of words) {
+    if (currentLineLength + word.length <= charsPerLine) {
+      currentLine += word;
+      currentLineLength += word.length;
+    } else {
+      if (currentLine) {
+        const padding = TYPING_PADDING_CHAR.repeat(charsPerLine - currentLineLength);
+        lines.push(currentLine + padding);
+      }
+      currentLine = word;
+      currentLineLength = word.length;
+    }
+  }
+  
+  if (currentLine) {
+    const padding = TYPING_PADDING_CHAR.repeat(charsPerLine - currentLineLength);
+    lines.push(currentLine + padding);
+  }
+  
+  return lines.join('');
+};
+
 interface TypingAreaProps {
   text: string;
   currentIndex: number;
@@ -152,10 +197,12 @@ interface TypingAreaProps {
 }
 
 interface TextWindow {
-  startIndex: number;
-  endIndex: number;
-  visibleText: string;
-  offsetCurrentIndex: number;
+  lines: string[]; // Array of padded lines
+  startLineIndex: number; // Index of first visible line in the full text
+  currentLineIndex: number; // Current line index within visible window
+  currentCharIndex: number; // Current character index within current line
+  totalStartIndex: number; // Absolute start index in original text
+  paddingChar: string; // Character used for padding
 }
 
 const TypingArea: React.FC<TypingAreaProps> = ({
@@ -173,12 +220,118 @@ const TypingArea: React.FC<TypingAreaProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const { settings } = useAppStore();
+  const PADDING_CHAR = TYPING_PADDING_CHAR; // Use exported constant
+  const MAX_VISIBLE_LINES = 8;
+  const MAX_TOTAL_CHARS = 512;
+  const MAX_ABSOLUTE_WIDTH = 1800; // Maximum width constraint in pixels
+  const WIDTH_PERCENTAGE = 0.9; // Use 90% of available width
+  
+  // State to track current optimal width
+  const [optimalWidth, setOptimalWidth] = useState(() => {
+    const windowWidth = window.innerWidth;
+    const percentageWidth = windowWidth * WIDTH_PERCENTAGE;
+    return Math.min(percentageWidth, MAX_ABSOLUTE_WIDTH);
+  });
+  
+  // Listen for window resize to update optimal width
+  useEffect(() => {
+    const handleResize = () => {
+      const windowWidth = window.innerWidth;
+      const percentageWidth = windowWidth * WIDTH_PERCENTAGE;
+      setOptimalWidth(Math.min(percentageWidth, MAX_ABSOLUTE_WIDTH));
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  
+  // Calculate characters per line based on responsive width and font size
+  const calculateCharsPerLine = useCallback(() => {
+    // Create a temporary element to measure character width
+    const testElement = document.createElement('span');
+    testElement.style.fontFamily = settings.fontFamily;
+    testElement.style.fontSize = `${settings.fontSize}px`;
+    testElement.style.fontStyle = settings.fontStyle;
+    testElement.style.position = 'absolute';
+    testElement.style.visibility = 'hidden';
+    testElement.style.whiteSpace = 'pre';
+    testElement.style.letterSpacing = '0.05em'; // Match TextDisplay letterSpacing
+    
+    // Use 'W' as it's typically the widest character in monospace fonts
+    testElement.textContent = 'W';
+    
+    document.body.appendChild(testElement);
+    const maxCharWidth = testElement.offsetWidth;
+    document.body.removeChild(testElement);
+    
+    // Use responsive width minus padding (24px on each side = 48px total)
+    const availableWidth = optimalWidth - 48;
+    const charsPerLine = Math.floor(availableWidth / maxCharWidth);
+    
+    // Ensure we don't exceed the max chars constraint
+    return Math.min(charsPerLine, Math.floor(MAX_TOTAL_CHARS / MAX_VISIBLE_LINES));
+  }, [settings.fontFamily, settings.fontSize, settings.fontStyle, optimalWidth]);
 
   useEffect(() => {
     if (containerRef.current && isActive) {
       containerRef.current.focus();
     }
   }, [isActive]);
+
+  // Process text into padded lines
+  const processedLines = useMemo(() => {
+    const charsPerLine = calculateCharsPerLine();
+    const lines: string[] = [];
+    const words = text.match(/\S+\s*/g) || []; // Match words with trailing whitespace
+    
+    let currentLine = '';
+    let currentLineLength = 0;
+    let totalCharsProcessed = 0;
+    
+    for (const word of words) {
+      // Check if we've reached the total character limit
+      if (totalCharsProcessed >= MAX_TOTAL_CHARS) {
+        break;
+      }
+      
+      // Check if word fits in current line
+      if (currentLineLength + word.length <= charsPerLine) {
+        currentLine += word;
+        currentLineLength += word.length;
+        totalCharsProcessed += word.length;
+      } else {
+        // Pad current line and start new one
+        if (currentLine) {
+          const padding = PADDING_CHAR.repeat(charsPerLine - currentLineLength);
+          lines.push(currentLine + padding);
+          totalCharsProcessed += padding.length;
+        }
+        
+        // Check if we've reached the line limit
+        if (lines.length >= MAX_VISIBLE_LINES) {
+          break;
+        }
+        
+        // If word is longer than charsPerLine, truncate it
+        if (word.length > charsPerLine) {
+          currentLine = word.substring(0, charsPerLine);
+          currentLineLength = charsPerLine;
+        } else {
+          currentLine = word;
+          currentLineLength = word.length;
+        }
+        totalCharsProcessed += currentLineLength;
+      }
+    }
+    
+    // Handle last line
+    if (currentLine && lines.length < MAX_VISIBLE_LINES) {
+      const padding = PADDING_CHAR.repeat(Math.max(0, charsPerLine - currentLineLength));
+      lines.push(currentLine + padding);
+    }
+    
+    return lines;
+  }, [text, calculateCharsPerLine]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Handle Enter key to activate
@@ -208,95 +361,134 @@ const TypingArea: React.FC<TypingAreaProps> = ({
 
   // Calculate text window for performance optimization
   const textWindow = useMemo((): TextWindow => {
-    const lines = text.split('\n');
-    const maxLines = 8;
-    
-    // Calculate which line the current character is on
-    let currentLine = 0;
+    // Map currentIndex to line and character position
     let charCount = 0;
+    let targetLineIndex = 0;
+    let targetCharIndex = 0;
     
-    for (let i = 0; i < lines.length; i++) {
-      if (charCount + lines[i].length >= currentIndex) {
-        currentLine = i;
+    // Find which line contains the current index
+    for (let i = 0; i < processedLines.length; i++) {
+      const line = processedLines[i];
+      const realChars = line.replace(new RegExp(`${PADDING_CHAR}+$`), ''); // Remove padding
+      
+      if (charCount + realChars.length > currentIndex) {
+        targetLineIndex = i;
+        targetCharIndex = currentIndex - charCount;
         break;
       }
-      charCount += lines[i].length + 1; // +1 for newline character
+      charCount += realChars.length;
     }
     
-    // Determine visible lines range
-    let startLine = Math.max(0, currentLine - 3); // Show 3 lines before current
-    let endLine = Math.min(lines.length - 1, startLine + maxLines - 1);
+    // Calculate window start based on current position
+    let startLineIndex = Math.max(0, targetLineIndex - MAX_VISIBLE_LINES + 3);
     
-    // Adjust if we're near the end
-    if (endLine - startLine < maxLines - 1) {
-      startLine = Math.max(0, endLine - maxLines + 1);
+    // When cursor is on 2nd to last visible line, shift window up
+    const currentVisibleLine = targetLineIndex - startLineIndex;
+    if (currentVisibleLine >= MAX_VISIBLE_LINES - 2) {
+      startLineIndex = Math.min(
+        processedLines.length - MAX_VISIBLE_LINES,
+        targetLineIndex - MAX_VISIBLE_LINES + 3
+      );
     }
     
-    // Calculate character indices
-    let startIndex = 0;
-    for (let i = 0; i < startLine; i++) {
-      startIndex += lines[i].length + 1;
-    }
+    // Get visible lines
+    const visibleLines = processedLines.slice(
+      startLineIndex,
+      Math.min(startLineIndex + MAX_VISIBLE_LINES, processedLines.length)
+    );
     
-    let endIndex = startIndex;
-    for (let i = startLine; i <= endLine; i++) {
-      endIndex += lines[i].length;
-      if (i < endLine) endIndex += 1; // Add newline except for last line
+    // Calculate total start index for absolute positioning
+    let totalStartIndex = 0;
+    for (let i = 0; i < startLineIndex; i++) {
+      const realChars = processedLines[i].replace(new RegExp(`${PADDING_CHAR}+$`), '');
+      totalStartIndex += realChars.length;
     }
-    
-    const visibleText = text.substring(startIndex, endIndex);
-    const offsetCurrentIndex = currentIndex - startIndex;
     
     return {
-      startIndex,
-      endIndex,
-      visibleText,
-      offsetCurrentIndex
+      lines: visibleLines,
+      startLineIndex,
+      currentLineIndex: targetLineIndex - startLineIndex,
+      currentCharIndex: targetCharIndex,
+      totalStartIndex,
+      paddingChar: PADDING_CHAR
     };
-  }, [text, currentIndex]);
+  }, [processedLines, currentIndex]);
   
   const renderText = () => {
-    return textWindow.visibleText.split('').map((char, relativeIndex) => {
-      const absoluteIndex = textWindow.startIndex + relativeIndex;
-      let status: 'pending' | 'correct' | 'incorrect' | 'current' = 'pending';
+    let absoluteIndex = textWindow.totalStartIndex;
+    
+    return textWindow.lines.map((line, lineIndex) => {
+      const lineChars = line.split('').map((char, charIndex) => {
+        const isPadding = char === PADDING_CHAR;
+        const isCurrentLine = lineIndex === textWindow.currentLineIndex;
+        const isCurrentChar = isCurrentLine && charIndex === textWindow.currentCharIndex;
+        const charAbsoluteIndex = absoluteIndex;
+        
+        let status: 'pending' | 'correct' | 'incorrect' | 'current' = 'pending';
+        
+        if (isCurrentChar) {
+          status = 'current';
+        } else if (!isPadding && charAbsoluteIndex < currentIndex) {
+          status = errors.has(charAbsoluteIndex) ? 'incorrect' : 'correct';
+        }
+        
+        const isWhitespace = char === ' ';
+        
+        // Only increment absoluteIndex for non-padding characters
+        if (!isPadding) {
+          absoluteIndex++;
+        }
+        
+        return (
+          <Character
+            key={`${lineIndex}-${charIndex}`}
+            status={isPadding ? 'pending' : status}
+            data-status={status === 'current' ? 'current' : undefined}
+            textColor={settings.textColor}
+            isSpace={isWhitespace}
+            cursorType={settings.cursorType}
+            style={{
+              color: isPadding ? 'transparent' : undefined,
+              backgroundColor: isPadding ? 'transparent' : undefined,
+            }}
+          >
+            {/* Keep the original character for proper spacing */}
+            {char}
+            {/* Overlay whitespace symbol for spaces (not padding) */}
+            {isWhitespace && !isPadding && (
+              <WhitespaceSymbol
+                status={status}
+                showWhitespace={settings.showWhitespaceSymbols}
+                textColor={settings.textColor}
+              >
+                {settings.whitespaceSymbol}
+              </WhitespaceSymbol>
+            )}
+            {/* Cursor overlay for non-block cursors */}
+            {status === 'current' && settings.cursorType !== 'block' && (
+              <CursorOverlay
+                cursorType={settings.cursorType}
+                primaryColor={settings.primaryColor}
+              />
+            )}
+          </Character>
+        );
+      });
       
-      if (relativeIndex === textWindow.offsetCurrentIndex) {
-        status = 'current';
-      } else if (absoluteIndex < currentIndex) {
-        status = errors.has(absoluteIndex) ? 'incorrect' : 'correct';
-      }
-      
-      const isWhitespace = char === ' ';
+      // No need to adjust absoluteIndex as we only count real characters
       
       return (
-        <Character
-          key={absoluteIndex}
-          status={status}
-          data-status={status === 'current' ? 'current' : undefined}
-          textColor={settings.textColor}
-          isSpace={isWhitespace}
-          cursorType={settings.cursorType}
+        <Box 
+          key={lineIndex} 
+          sx={{ 
+            whiteSpace: 'pre',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            display: 'block'
+          }}
         >
-          {/* Keep the original character for proper spacing */}
-          {char}
-          {/* Overlay whitespace symbol for spaces */}
-          {isWhitespace && (
-            <WhitespaceSymbol
-              status={status}
-              showWhitespace={settings.showWhitespaceSymbols}
-              textColor={settings.textColor}
-            >
-              {settings.whitespaceSymbol}
-            </WhitespaceSymbol>
-          )}
-          {/* Cursor overlay for non-block cursors */}
-          {status === 'current' && settings.cursorType !== 'block' && (
-            <CursorOverlay
-              cursorType={settings.cursorType}
-              primaryColor={settings.primaryColor}
-            />
-          )}
-        </Character>
+          {lineChars}
+        </Box>
       );
     });
   };
@@ -305,22 +497,32 @@ const TypingArea: React.FC<TypingAreaProps> = ({
   useEffect(() => {
     const currentChar = document.querySelector('[data-status="current"]');
     if (currentChar && containerRef.current) {
-      currentChar.scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
-        inline: 'nearest'
-      });
+      // Only scroll if the current character is near edges of viewport
+      const rect = currentChar.getBoundingClientRect();
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const relativeTop = rect.top - containerRect.top;
+      const relativeBottom = containerRect.bottom - rect.bottom;
+      
+      // Scroll only if character is within 100px of top/bottom edges
+      if (relativeTop < 100 || relativeBottom < 100) {
+        currentChar.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'nearest'
+        });
+      }
     }
-  }, [textWindow.offsetCurrentIndex, currentIndex]);
+  }, [textWindow.currentLineIndex, textWindow.currentCharIndex, currentIndex]);
 
   return (
-    <TextContainer
-      ref={containerRef}
-      tabIndex={0}
-      onKeyDown={handleKeyDown}
-      onMouseEnter={onMouseEnter}
-      onMouseLeave={onMouseLeave}
-    >
+    <TypingWrapper style={{ maxWidth: `${optimalWidth}px` }}>
+      <TextContainer
+        ref={containerRef}
+        tabIndex={0}
+        onKeyDown={handleKeyDown}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+      >
       <TextDisplay
         customFont={settings.fontFamily}
         customSize={settings.fontSize}
@@ -342,7 +544,8 @@ const TypingArea: React.FC<TypingAreaProps> = ({
           </OverlayText>
         </InactiveOverlay>
       )}
-    </TextContainer>
+      </TextContainer>
+    </TypingWrapper>
   );
 };
 

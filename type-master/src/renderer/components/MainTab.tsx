@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Typography, LinearProgress, Paper, Modal, Fade } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import ControlPanel from './ControlPanel';
-import TypingArea from './TypingArea';
+import TypingArea, { TYPING_PADDING_CHAR } from './TypingArea';
 import { useAppStore } from '../store/useAppStore';
 import { TypingSession, KeyPress } from '../../types';
 import { calculateScore } from '../utils/score';
@@ -243,20 +243,32 @@ const MainTab: React.FC = () => {
     }
     
     setTypedText(typedText + key);
-    setCurrentIndex(currentIndex + 1);
+    let nextIndex = currentIndex + 1;
+    
+    // Skip padding characters
+    while (nextIndex < activeText.length && activeText[nextIndex] === TYPING_PADDING_CHAR) {
+      nextIndex++;
+    }
+    
+    setCurrentIndex(nextIndex);
     
     if (mode === 'characters') {
-      const newProgress = ((currentIndex + 1) / targetValue) * 100;
+      // Count only non-padding characters for progress
+      const nonPaddingCount = typedText.length + 1;
+      const newProgress = (nonPaddingCount / targetValue) * 100;
       setProgress(Math.min(newProgress, 100));
       
-      if (currentIndex + 1 >= targetValue) {
+      if (nonPaddingCount >= targetValue) {
         handleStop();
       }
     } else if (mode === 'free') {
-      const newProgress = ((currentIndex + 1) / activeText.length) * 100;
+      // Count only non-padding characters for progress
+      const totalNonPadding = activeText.replace(new RegExp(TYPING_PADDING_CHAR, 'g'), '').length;
+      const nonPaddingCount = typedText.length + 1;
+      const newProgress = (nonPaddingCount / totalNonPadding) * 100;
       setProgress(Math.min(newProgress, 100));
       
-      if (currentIndex + 1 >= activeText.length) {
+      if (nextIndex >= activeText.length) {
         handleStop();
       }
     }

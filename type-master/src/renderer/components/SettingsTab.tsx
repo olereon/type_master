@@ -170,14 +170,14 @@ const SettingsTab: React.FC = () => {
             <Divider sx={{ mb: 2 }} />
 
             <SettingRow>
-              <Typography>Font Size</Typography>
+              <Typography>Font Size: {settings.fontSize}px</Typography>
               <Box sx={{ width: 200 }}>
                 <Slider
                   value={settings.fontSize}
                   onChange={(_, value) => updateSettings({ fontSize: value as number })}
                   min={12}
                   max={48}
-                  valueLabelDisplay="on"
+                  valueLabelDisplay="off"
                   marks={[
                     { value: 12, label: '12px' },
                     { value: 24, label: '24px' },
@@ -408,7 +408,7 @@ const SettingsTab: React.FC = () => {
             
             <SettingRow>
               <Box>
-                <Typography>Sessions for Averages</Typography>
+                <Typography>Sessions for Averages: {settings.sessionsForAverage}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   Number of previous sessions used in average calculations
                 </Typography>
@@ -419,7 +419,7 @@ const SettingsTab: React.FC = () => {
                   onChange={(_, value) => updateSettings({ sessionsForAverage: value as number })}
                   min={1}
                   max={100}
-                  valueLabelDisplay="on"
+                  valueLabelDisplay="off"
                   marks={[
                     { value: 1, label: '1' },
                     { value: 25, label: '25' },
@@ -433,7 +433,7 @@ const SettingsTab: React.FC = () => {
             
             <SettingRow>
               <Box>
-                <Typography>K0 Coefficient</Typography>
+                <Typography>K0 Coefficient: {settings.scoreK0}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   Controls WPM impact (higher = less impact from WPM)
                 </Typography>
@@ -445,7 +445,7 @@ const SettingsTab: React.FC = () => {
                   min={25}
                   max={125}
                   step={5}
-                  valueLabelDisplay="on"
+                  valueLabelDisplay="off"
                   marks={[
                     { value: 25, label: '25' },
                     { value: 75, label: '75' },
@@ -457,7 +457,7 @@ const SettingsTab: React.FC = () => {
             
             <SettingRow>
               <Box>
-                <Typography>K1 Coefficient</Typography>
+                <Typography>K1 Coefficient: {settings.scoreK1}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   Controls accuracy penalty impact (lower = stricter)
                 </Typography>
@@ -469,7 +469,7 @@ const SettingsTab: React.FC = () => {
                   min={0.75}
                   max={0.95}
                   step={0.01}
-                  valueLabelDisplay="on"
+                  valueLabelDisplay="off"
                   marks={[
                     { value: 0.75, label: '0.75' },
                     { value: 0.85, label: '0.85' },
@@ -481,7 +481,7 @@ const SettingsTab: React.FC = () => {
             
             <SettingRow>
               <Box>
-                <Typography>K2 Coefficient</Typography>
+                <Typography>K2 Coefficient: {settings.scoreK2}</Typography>
                 <Typography variant="caption" color="text.secondary">
                   Controls character count impact (lower = rewards longer texts)
                 </Typography>
@@ -493,7 +493,7 @@ const SettingsTab: React.FC = () => {
                   min={5}
                   max={25}
                   step={1}
-                  valueLabelDisplay="on"
+                  valueLabelDisplay="off"
                   marks={[
                     { value: 5, label: '5' },
                     { value: 15, label: '15' },
