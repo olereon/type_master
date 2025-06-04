@@ -31,6 +31,9 @@ export interface UserSettings {
   scoreK1: number; // default 0.9, range [0.75, 0.95]
   scoreK2: number; // default 10, range [5, 25]
   sessionsForAverage: number; // default 50, range [1, 100]
+  whitespaceSymbol: string; // Unicode character for whitespace visualization
+  showWhitespaceSymbols: boolean; // Toggle to show/hide whitespace symbols as text color
+  cursorType: 'block' | 'box' | 'line' | 'underline'; // Cursor visualization type
 }
 
 export interface TextSource {

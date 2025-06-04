@@ -9,6 +9,10 @@ import {
   Paper,
   Divider,
   Button,
+  ToggleButton,
+  ToggleButtonGroup,
+  Switch,
+  FormControlLabel,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { HexColorPicker } from 'react-colorful';
@@ -50,6 +54,48 @@ const SettingRow = styled(Box)(({ theme }) => ({
   },
 }));
 
+const WhitespaceSymbolButton = styled(ToggleButton)(({ theme }) => ({
+  padding: theme.spacing(1),
+  minWidth: 40,
+  fontSize: '1.5rem',
+  fontFamily: 'monospace',
+}));
+
+const WhitespacePreview = styled(Box)(({ theme }) => ({
+  fontSize: '3rem',
+  fontFamily: 'monospace',
+  padding: theme.spacing(2),
+  backgroundColor: theme.palette.action.hover,
+  borderRadius: theme.shape.borderRadius,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: 80,
+  marginTop: theme.spacing(1),
+}));
+
+const CursorButton = styled(ToggleButton)(({ theme }) => ({
+  padding: theme.spacing(1.5),
+  minWidth: 60,
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: theme.spacing(0.5),
+}));
+
+const CursorDemo = styled(Box)(({ theme }) => ({
+  width: 20,
+  height: 20,
+  position: 'relative',
+  backgroundColor: theme.palette.action.hover,
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: 2,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '12px',
+}));
+
 
 const PreviewText = styled(Typography)<{ customFont: string; customSize: number; customStyle: string; customColor: string }>(
   ({ customFont, customSize, customStyle, customColor }) => ({
@@ -81,6 +127,16 @@ const SettingsTab: React.FC = () => {
     'Times New Roman',
   ];
 
+  const whitespaceSymbols = [
+    { symbol: '\u2022', name: 'Bullet' }, // •
+    { symbol: '\u00B7', name: 'Middle Dot' }, // ·
+    { symbol: '\u2218', name: 'Ring Operator' }, // ∘
+    { symbol: '\u2219', name: 'Bullet Operator' }, // ∙
+    { symbol: '\u25E6', name: 'White Bullet' }, // ◦
+    { symbol: '\u2023', name: 'Triangular Bullet' }, // ‣
+    { symbol: '\u25AA', name: 'Square Bullet' }, // ▪
+  ];
+
   const handleResetSettings = () => {
     updateSettings({
       fontSize: 20,
@@ -92,6 +148,9 @@ const SettingsTab: React.FC = () => {
       scoreK1: 0.9,
       scoreK2: 10,
       sessionsForAverage: 50,
+      whitespaceSymbol: '\u00B7',
+      showWhitespaceSymbols: false,
+      cursorType: 'block',
     });
   };
 
@@ -173,6 +232,120 @@ const SettingsTab: React.FC = () => {
                   {settings.textColor}
                 </Typography>
               </Box>
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Whitespace Symbol
+              </Typography>
+              <ToggleButtonGroup
+                value={settings.whitespaceSymbol}
+                exclusive
+                onChange={(_, value) => value && updateSettings({ whitespaceSymbol: value })}
+                sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}
+              >
+                {whitespaceSymbols.map(({ symbol, name }) => (
+                  <WhitespaceSymbolButton
+                    key={symbol}
+                    value={symbol}
+                    title={name}
+                  >
+                    {symbol}
+                  </WhitespaceSymbolButton>
+                ))}
+              </ToggleButtonGroup>
+              
+              <WhitespacePreview>
+                <span style={{ opacity: 0.5 }}>Text</span>
+                <span style={{ color: settings.showWhitespaceSymbols ? settings.textColor : 'transparent' }}>
+                  {settings.whitespaceSymbol}
+                </span>
+                <span style={{ opacity: 0.5 }}>with</span>
+                <span style={{ color: settings.showWhitespaceSymbols ? settings.textColor : 'transparent' }}>
+                  {settings.whitespaceSymbol}
+                </span>
+                <span style={{ opacity: 0.5 }}>spaces</span>
+              </WhitespacePreview>
+            </Box>
+
+            <Box sx={{ mt: 2 }}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.showWhitespaceSymbols}
+                    onChange={(e) => updateSettings({ showWhitespaceSymbols: e.target.checked })}
+                  />
+                }
+                label="Show whitespace symbols as text color"
+              />
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 7 }}>
+                When disabled, whitespace symbols match the background color until mistyped
+              </Typography>
+            </Box>
+
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Cursor Type
+              </Typography>
+              <ToggleButtonGroup
+                value={settings.cursorType}
+                exclusive
+                onChange={(_, value) => value && updateSettings({ cursorType: value })}
+                sx={{ display: 'flex', gap: 0.5 }}
+              >
+                <CursorButton value="block" title="Block Cursor">
+                  <CursorDemo>
+                    <Box sx={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      backgroundColor: 'primary.main',
+                      borderRadius: 1
+                    }} />
+                  </CursorDemo>
+                  <Typography variant="caption">Block</Typography>
+                </CursorButton>
+                
+                <CursorButton value="box" title="Box Cursor">
+                  <CursorDemo>
+                    <Box sx={{ 
+                      width: '100%', 
+                      height: '100%', 
+                      border: '2px solid',
+                      borderColor: 'primary.main',
+                      borderRadius: 1,
+                      boxSizing: 'border-box'
+                    }} />
+                  </CursorDemo>
+                  <Typography variant="caption">Box</Typography>
+                </CursorButton>
+                
+                <CursorButton value="line" title="Vertical Line Cursor">
+                  <CursorDemo>
+                    <Box sx={{ 
+                      width: '2px', 
+                      height: '100%', 
+                      backgroundColor: 'primary.main'
+                    }} />
+                  </CursorDemo>
+                  <Typography variant="caption">Line</Typography>
+                </CursorButton>
+                
+                <CursorButton value="underline" title="Underline Cursor">
+                  <CursorDemo>
+                    <Box sx={{ 
+                      position: 'absolute',
+                      bottom: 0,
+                      left: 0,
+                      width: '100%', 
+                      height: '2px', 
+                      backgroundColor: 'primary.main'
+                    }} />
+                  </CursorDemo>
+                  <Typography variant="caption">Under</Typography>
+                </CursorButton>
+              </ToggleButtonGroup>
             </Box>
           </SettingSection>
         </SettingsColumn>

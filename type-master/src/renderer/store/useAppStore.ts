@@ -43,6 +43,9 @@ const defaultSettings: UserSettings = {
   scoreK1: 0.9,
   scoreK2: 10,
   sessionsForAverage: 50,
+  whitespaceSymbol: '\u00B7', // Middle dot as default
+  showWhitespaceSymbols: false, // Hidden by default
+  cursorType: 'block', // Block cursor as default
 };
 
 const defaultTextSource: TextSource = {

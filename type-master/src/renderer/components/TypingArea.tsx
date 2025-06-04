@@ -52,11 +52,15 @@ const TextDisplay = styled(Typography)<{ customFont?: string; customSize?: numbe
 const Character = styled('span')<{ 
   status: 'pending' | 'correct' | 'incorrect' | 'current';
   textColor?: string;
+  isSpace?: boolean;
+  cursorType?: 'block' | 'box' | 'line' | 'underline';
 }>(
-  ({ theme, status, textColor }) => ({
+  ({ theme, status, textColor, isSpace, cursorType }) => ({
     position: 'relative',
     color:
-      status === 'pending'
+      isSpace 
+        ? 'transparent' // Make space character invisible so we can show symbol overlay
+        : status === 'pending'
         ? textColor || theme.palette.text.primary
         : status === 'correct'
         ? theme.palette.grey[600]
@@ -64,12 +68,72 @@ const Character = styled('span')<{
         ? theme.palette.error.main
         : textColor || theme.palette.text.primary,
     backgroundColor:
-      status === 'current'
+      status === 'current' && cursorType === 'block'
         ? theme.palette.action.selected
         : 'transparent',
     borderRadius: 2,
     transition: status === 'current' ? 'background-color 0.1s ease' : 'none', // Only animate current character
     willChange: status === 'current' ? 'background-color' : 'auto', // Optimize GPU rendering
+  })
+);
+
+const WhitespaceSymbol = styled('span')<{
+  status: 'pending' | 'correct' | 'incorrect' | 'current';
+  showWhitespace: boolean;
+  textColor?: string;
+}>(
+  ({ theme, status, showWhitespace, textColor }) => ({
+    position: 'absolute',
+    left: 0,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    color:
+      status === 'incorrect'
+        ? theme.palette.error.main
+        : showWhitespace
+        ? status === 'correct'
+          ? theme.palette.grey[600]
+          : textColor || theme.palette.text.primary
+        : 'transparent',
+    pointerEvents: 'none',
+    lineHeight: 1, // Ensure the symbol doesn't inherit line height
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: '1em', // Height relative to font size
+  })
+);
+
+const CursorOverlay = styled('span')<{
+  cursorType: 'block' | 'box' | 'line' | 'underline';
+  primaryColor: string;
+}>(
+  ({ cursorType, primaryColor }) => ({
+    position: 'absolute',
+    pointerEvents: 'none',
+    ...(cursorType === 'box' && {
+      left: 0,
+      top: 0,
+      width: '100%',
+      height: '100%',
+      border: `2px solid ${primaryColor}`,
+      borderRadius: 2,
+      boxSizing: 'border-box',
+    }),
+    ...(cursorType === 'line' && {
+      left: 0,
+      top: 0,
+      width: '2px',
+      height: '100%',
+      backgroundColor: primaryColor,
+    }),
+    ...(cursorType === 'underline' && {
+      left: 0,
+      bottom: 0,
+      width: '100%',
+      height: '2px',
+      backgroundColor: primaryColor,
+    }),
   })
 );
 
@@ -202,14 +266,36 @@ const TypingArea: React.FC<TypingAreaProps> = ({
         status = errors.has(absoluteIndex) ? 'incorrect' : 'correct';
       }
       
+      const isWhitespace = char === ' ';
+      
       return (
         <Character
           key={absoluteIndex}
           status={status}
           data-status={status === 'current' ? 'current' : undefined}
           textColor={settings.textColor}
+          isSpace={isWhitespace}
+          cursorType={settings.cursorType}
         >
+          {/* Keep the original character for proper spacing */}
           {char}
+          {/* Overlay whitespace symbol for spaces */}
+          {isWhitespace && (
+            <WhitespaceSymbol
+              status={status}
+              showWhitespace={settings.showWhitespaceSymbols}
+              textColor={settings.textColor}
+            >
+              {settings.whitespaceSymbol}
+            </WhitespaceSymbol>
+          )}
+          {/* Cursor overlay for non-block cursors */}
+          {status === 'current' && settings.cursorType !== 'block' && (
+            <CursorOverlay
+              cursorType={settings.cursorType}
+              primaryColor={settings.primaryColor}
+            />
+          )}
         </Character>
       );
     });
