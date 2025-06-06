@@ -14,12 +14,14 @@ import {
   Switch,
   FormControlLabel,
 } from '@mui/material';
+import { Language, Keyboard } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { HexColorPicker } from 'react-colorful';
 import { useAppStore } from '../store/useAppStore';
 
 const SettingsContainer = styled(Box)(({ theme }) => ({
-  padding: theme.spacing(4),
+  padding: theme.spacing(2),
+  paddingTop: 0, // Remove top padding to lift content
   height: '100%',
   overflow: 'hidden',
 }));
@@ -99,15 +101,19 @@ const CursorDemo = styled(Box)(({ theme }) => ({
 
 const PreviewText = styled(Typography)<{ customFont: string; customSize: number; customStyle: string; customColor: string }>(
   ({ customFont, customSize, customStyle, customColor }) => ({
-    fontFamily: customFont,
-    fontSize: customSize,
-    fontStyle: customStyle === 'italic' ? 'italic' : 'normal',
-    fontWeight: customStyle === 'bold' ? 600 : 400,
-    color: customColor,
-    marginTop: 24,
-    padding: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: 4,
+    fontFamily: `${customFont} !important`,
+    fontSize: `${customSize}px !important`,
+    fontStyle: `${customStyle === 'italic' ? 'italic' : 'normal'} !important`,
+    fontWeight: `${customStyle === 'bold' ? 600 : 400} !important`,
+    color: `${customColor} !important`,
+    margin: 0,
+    padding: 0,
+    lineHeight: '1.2 !important',
+    '&.MuiTypography-root': {
+      fontSize: `${customSize}px !important`,
+      margin: 0,
+      padding: 0,
+    }
   })
 );
 
@@ -137,9 +143,28 @@ const SettingsTab: React.FC = () => {
     { symbol: '\u25AA', name: 'Square Bullet' }, // ▪
   ];
 
+  const keyboardLanguages = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Español' },
+    { code: 'fr', name: 'Français' },
+    { code: 'de', name: 'Deutsch' },
+    { code: 'uk', name: 'Українська' },
+  ];
+
+  const keyboardLayouts: Record<string, string[]> = {
+    en: ['QWERTY', 'DVORAK', 'COLEMAK', 'WORKMAN'],
+    es: ['QWERTY', 'QWERTY-ES'],
+    fr: ['AZERTY', 'BÉPO'],
+    de: ['QWERTZ', 'NEO'],
+    uk: ['ЙЦУКЕН', 'QWERTY'],
+  };
+
+  const [selectedLanguage, setSelectedLanguage] = React.useState(settings.keyboardLanguage || 'en');
+  const [selectedLayout, setSelectedLayout] = React.useState(settings.keyboardLayout || 'QWERTY');
+
   const handleResetSettings = () => {
     updateSettings({
-      fontSize: 20,
+      fontSize: 36,
       fontFamily: 'JetBrains Mono',
       fontStyle: 'normal',
       textColor: '#FFFFFF',
@@ -151,15 +176,15 @@ const SettingsTab: React.FC = () => {
       whitespaceSymbol: '\u00B7',
       showWhitespaceSymbols: false,
       cursorType: 'block',
+      keyboardLayout: 'QWERTY',
+      keyboardLanguage: 'en',
     });
+    setSelectedLanguage('en');
+    setSelectedLayout('QWERTY');
   };
 
   return (
     <SettingsContainer>
-      <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
-        Settings
-      </Typography>
-
       <ColumnsContainer>
         {/* Font & Text Column */}
         <SettingsColumn>
@@ -222,15 +247,40 @@ const SettingsTab: React.FC = () => {
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Text Color
               </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <HexColorPicker
-                  color={settings.textColor}
-                  onChange={(color) => updateSettings({ textColor: color })}
-                  style={{ width: 120, height: 120 }}
-                />
-                <Typography variant="caption">
-                  {settings.textColor}
-                </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
+                <Box>
+                  <HexColorPicker
+                    color={settings.textColor}
+                    onChange={(color) => updateSettings({ textColor: color })}
+                    style={{ width: 120, height: 120 }}
+                  />
+                  <Typography variant="caption" sx={{ display: 'block', mt: 0.5 }}>
+                    {settings.textColor}
+                  </Typography>
+                </Box>
+                <Box sx={{ 
+                  flex: 1,
+                  minHeight: 128, // Height to accommodate 2 lines at 48px
+                  maxHeight: 128,
+                  overflow: 'hidden',
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  p: 1,
+                  ml: 1,
+                  backgroundColor: 'background.default',
+                  display: 'flex',
+                  alignItems: 'flex-start'
+                }}>
+                  <PreviewText
+                    customFont={settings.fontFamily}
+                    customSize={settings.fontSize} // Use actual font size
+                    customStyle={settings.fontStyle}
+                    customColor={settings.textColor}
+                  >
+                    The quick brown fox jumps over the lazy dog
+                  </PreviewText>
+                </Box>
               </Box>
             </Box>
 
@@ -285,67 +335,153 @@ const SettingsTab: React.FC = () => {
               </Typography>
             </Box>
 
-            <Box sx={{ mt: 2 }}>
+            <Box sx={{ mt: 2, display: 'flex', gap: 4 }}>
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Cursor Type
+                </Typography>
+                <ToggleButtonGroup
+                  value={settings.cursorType}
+                  exclusive
+                  onChange={(_, value) => value && updateSettings({ cursorType: value })}
+                  sx={{ display: 'flex', gap: 0.5 }}
+                >
+                  <CursorButton value="block" title="Block Cursor">
+                    <CursorDemo>
+                      <Box sx={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        backgroundColor: 'primary.main',
+                        borderRadius: 1
+                      }} />
+                    </CursorDemo>
+                    <Typography variant="caption">Block</Typography>
+                  </CursorButton>
+                  
+                  <CursorButton value="box" title="Box Cursor">
+                    <CursorDemo>
+                      <Box sx={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        border: '2px solid',
+                        borderColor: 'primary.main',
+                        borderRadius: 1,
+                        boxSizing: 'border-box'
+                      }} />
+                    </CursorDemo>
+                    <Typography variant="caption">Box</Typography>
+                  </CursorButton>
+                  
+                  <CursorButton value="line" title="Vertical Line Cursor">
+                    <CursorDemo>
+                      <Box sx={{ 
+                        width: '2px', 
+                        height: '100%', 
+                        backgroundColor: 'primary.main'
+                      }} />
+                    </CursorDemo>
+                    <Typography variant="caption">Line</Typography>
+                  </CursorButton>
+                  
+                  <CursorButton value="underline" title="Underline Cursor">
+                    <CursorDemo>
+                      <Box sx={{ 
+                        position: 'absolute',
+                        bottom: 0,
+                        left: 0,
+                        width: '100%', 
+                        height: '2px', 
+                        backgroundColor: 'primary.main'
+                      }} />
+                    </CursorDemo>
+                    <Typography variant="caption">Under</Typography>
+                  </CursorButton>
+                </ToggleButtonGroup>
+              </Box>
+
+              <Box sx={{ flex: 1 }}>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                  Keyboard
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
+                  <FormControl sx={{ flex: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                      <Language fontSize="small" color="action" />
+                      <Typography variant="caption" color="text.secondary">
+                        Language
+                      </Typography>
+                    </Box>
+                    <Select
+                      value={selectedLanguage}
+                      onChange={(e) => {
+                        const newLang = e.target.value;
+                        setSelectedLanguage(newLang);
+                        const availableLayouts = keyboardLayouts[newLang] || ['QWERTY'];
+                        const newLayout = availableLayouts.includes(selectedLayout) 
+                          ? selectedLayout 
+                          : availableLayouts[0];
+                        setSelectedLayout(newLayout);
+                        updateSettings({ keyboardLanguage: newLang, keyboardLayout: newLayout });
+                      }}
+                      size="small"
+                    >
+                      {keyboardLanguages.map(lang => (
+                        <MenuItem key={lang.code} value={lang.code}>{lang.name}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  
+                  <FormControl sx={{ flex: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+                      <Keyboard fontSize="small" color="action" />
+                      <Typography variant="caption" color="text.secondary">
+                        Layout
+                      </Typography>
+                    </Box>
+                    <Select
+                      value={selectedLayout}
+                      onChange={(e) => {
+                        const newLayout = e.target.value;
+                        setSelectedLayout(newLayout);
+                        updateSettings({ keyboardLayout: newLayout });
+                      }}
+                      onDoubleClick={() => {
+                        // TODO: Open keyboard layout diagram
+                        console.log('Double-click to show layout diagram for:', selectedLayout);
+                      }}
+                      size="small"
+                    >
+                      {(keyboardLayouts[selectedLanguage] || ['QWERTY']).map(layout => (
+                        <MenuItem key={layout} value={layout}>{layout}</MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              </Box>
+            </Box>
+
+            <Divider sx={{ my: 2 }} />
+
+            <Box sx={{ mt: 1 }}>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Cursor Type
+                Layout Preview
               </Typography>
-              <ToggleButtonGroup
-                value={settings.cursorType}
-                exclusive
-                onChange={(_, value) => value && updateSettings({ cursorType: value })}
-                sx={{ display: 'flex', gap: 0.5 }}
-              >
-                <CursorButton value="block" title="Block Cursor">
-                  <CursorDemo>
-                    <Box sx={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      backgroundColor: 'primary.main',
-                      borderRadius: 1
-                    }} />
-                  </CursorDemo>
-                  <Typography variant="caption">Block</Typography>
-                </CursorButton>
-                
-                <CursorButton value="box" title="Box Cursor">
-                  <CursorDemo>
-                    <Box sx={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      border: '2px solid',
-                      borderColor: 'primary.main',
-                      borderRadius: 1,
-                      boxSizing: 'border-box'
-                    }} />
-                  </CursorDemo>
-                  <Typography variant="caption">Box</Typography>
-                </CursorButton>
-                
-                <CursorButton value="line" title="Vertical Line Cursor">
-                  <CursorDemo>
-                    <Box sx={{ 
-                      width: '2px', 
-                      height: '100%', 
-                      backgroundColor: 'primary.main'
-                    }} />
-                  </CursorDemo>
-                  <Typography variant="caption">Line</Typography>
-                </CursorButton>
-                
-                <CursorButton value="underline" title="Underline Cursor">
-                  <CursorDemo>
-                    <Box sx={{ 
-                      position: 'absolute',
-                      bottom: 0,
-                      left: 0,
-                      width: '100%', 
-                      height: '2px', 
-                      backgroundColor: 'primary.main'
-                    }} />
-                  </CursorDemo>
-                  <Typography variant="caption">Under</Typography>
-                </CursorButton>
-              </ToggleButtonGroup>
+              <Box sx={{
+                p: 2,
+                border: 1,
+                borderColor: 'divider',
+                borderRadius: 1,
+                backgroundColor: 'background.default',
+                textAlign: 'center',
+                minHeight: 60
+              }}>
+                <Typography variant="body2" color="text.secondary">
+                  {selectedLayout} ({keyboardLanguages.find(l => l.code === selectedLanguage)?.name})
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  Layout diagram coming soon
+                </Typography>
+              </Box>
             </Box>
           </SettingSection>
         </SettingsColumn>
@@ -358,7 +494,7 @@ const SettingsTab: React.FC = () => {
             </Typography>
             <Divider sx={{ mb: 2 }} />
 
-            <Box sx={{ mb: 3 }}>
+            <Box>
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 Primary Color
               </Typography>
@@ -374,27 +510,7 @@ const SettingsTab: React.FC = () => {
               </Box>
             </Box>
 
-            <Box sx={{ mt: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Preview
-              </Typography>
-              <PreviewText
-                customFont={settings.fontFamily}
-                customSize={settings.fontSize}
-                customStyle={settings.fontStyle}
-                customColor={settings.textColor}
-              >
-                The quick brown fox jumps over the lazy dog.
-                Pack my box with five dozen liquor jugs.
-                How vexingly quick daft zebras jump!
-              </PreviewText>
-            </Box>
-
-            <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-              <Button variant="outlined" onClick={handleResetSettings}>
-                Reset to Defaults
-              </Button>
-            </Box>
+            {/* Space for upcoming Keyboard Row Colors feature */}
           </SettingSection>
         </SettingsColumn>
 
@@ -507,6 +623,12 @@ const SettingsTab: React.FC = () => {
               <Typography variant="caption" color="text.secondary">
                 Score Formula: 1000 × (2^(WPM/K0)) × (K1^((1-Accuracy)×100)) × log₁₀(Characters/K2 + 1)
               </Typography>
+            </Box>
+
+            <Box sx={{ mt: 'auto', pt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button variant="outlined" onClick={handleResetSettings}>
+                Reset to Defaults
+              </Button>
             </Box>
           </SettingSection>
         </SettingsColumn>

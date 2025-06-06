@@ -34,6 +34,8 @@ export interface UserSettings {
   whitespaceSymbol: string; // Unicode character for whitespace visualization
   showWhitespaceSymbols: boolean; // Toggle to show/hide whitespace symbols as text color
   cursorType: 'block' | 'box' | 'line' | 'underline'; // Cursor visualization type
+  keyboardLayout: string; // Keyboard layout type (depends on language)
+  keyboardLanguage: string; // Keyboard language code
 }
 
 export interface TextSource {
