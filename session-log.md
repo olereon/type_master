@@ -690,5 +690,53 @@ Characters_Per_Line = (Typing_Area_Width - 48px) / Max_Char_Width
 
 ---
 
-**Session Status**: Complete responsive typing system
-**Total Features Completed**: All features + performance + responsive design
+### 23. Settings UI Cleanup and Reorganization
+**Time**: 2025-06-06 16:00:00
+**User Request**: Clean up Settings window layout based on provided mockup
+
+**Changes Implemented**:
+
+1. **Removed Redundant Title**:
+   - Eliminated "Settings" header text at top-left
+   - More efficient use of vertical space
+
+2. **Adjusted Vertical Positioning**:
+   - Reduced top padding from 32px to 0
+   - Lifted all content by ~10% of screen height
+   - Better vertical centering of settings panels
+
+3. **Reorganized Content Layout**:
+   - Moved text preview from Visual & Sound to Font & Text section
+   - Consolidated font-related settings in one column
+   - Created space in Visual & Sound for upcoming features
+
+4. **Visual & Sound Preparation**:
+   - Added placeholder comment for Keyboard Row Colors feature
+   - Maintained Primary Color picker
+   - Reset button positioned at bottom with auto margin
+
+**Technical Changes**:
+```typescript
+// Container adjustments
+const SettingsContainer = styled(Box)(({ theme }) => ({
+  padding: theme.spacing(2),
+  paddingTop: 0, // Remove top padding to lift content
+  height: '100%',
+  overflow: 'hidden',
+}));
+```
+
+**Files Modified**:
+- `src/renderer/components/SettingsTab.tsx` - Layout restructuring
+
+**Result**: 
+✅ Cleaner, more organized Settings layout
+✅ Better vertical space utilization
+✅ Font & Text section now contains all text-related settings
+✅ Visual & Sound section ready for keyboard row colors feature
+✅ Improved visual hierarchy and grouping
+
+---
+
+**Session Status**: UI cleaned up, ready for keyboard row colors implementation
+**Total Features Completed**: All features + performance + responsive design + UI polish

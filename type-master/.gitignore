@@ -45,3 +45,7 @@ electron-builder.yml
 # Cache
 .eslintcache
 .cache/
+
+# AI Assistant Documentation (local only)
+CLAUDE.md
+session-log.md
