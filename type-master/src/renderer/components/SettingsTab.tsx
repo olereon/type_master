@@ -152,15 +152,57 @@ const SettingsTab: React.FC = () => {
   ];
 
   const keyboardLayouts: Record<string, string[]> = {
-    en: ['QWERTY', 'DVORAK', 'COLEMAK', 'WORKMAN'],
-    es: ['QWERTY', 'QWERTY-ES'],
-    fr: ['AZERTY', 'BÉPO'],
-    de: ['QWERTZ', 'NEO'],
-    uk: ['ЙЦУКЕН', 'QWERTY'],
+    en: ['US-QWERTY', 'UK-QWERTY', 'DVORAK', 'COLEMAK', 'WORKMAN'],
+    es: ['LATAM', 'Standart'],
+    fr: ['BEPO', 'Canadian', 'Standart'],
+    de: ['Standart'],
+    uk: ['Standart'],
   };
 
+  // Fix legacy layout settings
+  const normalizedLayout = settings.keyboardLayout === 'QWERTY' ? 'US-QWERTY' : settings.keyboardLayout;
+  
   const [selectedLanguage, setSelectedLanguage] = React.useState(settings.keyboardLanguage || 'en');
-  const [selectedLayout, setSelectedLayout] = React.useState(settings.keyboardLayout || 'QWERTY');
+  const [selectedLayout, setSelectedLayout] = React.useState(normalizedLayout || 'US-QWERTY');
+  
+  // State for layout image
+  const [layoutImageSrc, setLayoutImageSrc] = React.useState<string>('');
+
+  // Load layout image dynamically
+  React.useEffect(() => {
+    const loadLayoutImage = async () => {
+      if (!selectedLanguage || !selectedLayout) {
+        setLayoutImageSrc('');
+        return;
+      }
+
+      // Map language codes to filename prefixes
+      const languageFileNames: Record<string, string> = {
+        en: 'English',
+        es: 'Spanish', 
+        fr: 'French',
+        de: 'German',
+        uk: 'Ukrainian'
+      };
+      
+      const fileLanguageName = languageFileNames[selectedLanguage] || 'English';
+      const imageName = `Layout_${fileLanguageName}_${selectedLayout}.png`;
+      
+      console.log(`Attempting to load: ${imageName}`);
+      console.log(`Language: ${selectedLanguage}, Layout: ${selectedLayout}`);
+      
+      try {
+        const imageModule = await import(`../assets/keyboard-layouts/${imageName}`);
+        console.log(`Successfully loaded: ${imageName}`);
+        setLayoutImageSrc(imageModule.default);
+      } catch (error) {
+        console.log(`Layout image not found: ${imageName}`, error);
+        setLayoutImageSrc('');
+      }
+    };
+
+    loadLayoutImage();
+  }, [selectedLanguage, selectedLayout]);
 
   const handleResetSettings = () => {
     updateSettings({
@@ -176,11 +218,11 @@ const SettingsTab: React.FC = () => {
       whitespaceSymbol: '\u00B7',
       showWhitespaceSymbols: false,
       cursorType: 'block',
-      keyboardLayout: 'QWERTY',
+      keyboardLayout: 'US-QWERTY',
       keyboardLanguage: 'en',
     });
     setSelectedLanguage('en');
-    setSelectedLayout('QWERTY');
+    setSelectedLayout('US-QWERTY');
   };
 
   return (
@@ -467,20 +509,46 @@ const SettingsTab: React.FC = () => {
                 Layout Preview
               </Typography>
               <Box sx={{
-                p: 2,
+                p: 1,
                 border: 1,
                 borderColor: 'divider',
                 borderRadius: 1,
-                backgroundColor: 'background.default',
+                backgroundColor: '#FFFFFF',
                 textAlign: 'center',
-                minHeight: 60
+                minHeight: 120,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                position: 'relative',
+                overflow: 'hidden'
               }}>
-                <Typography variant="body2" color="text.secondary">
-                  {selectedLayout} ({keyboardLanguages.find(l => l.code === selectedLanguage)?.name})
-                </Typography>
-                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                  Layout diagram coming soon
-                </Typography>
+                {selectedLayout && selectedLanguage ? (
+                  layoutImageSrc ? (
+                    <img 
+                      src={layoutImageSrc}
+                      alt={`${selectedLayout} keyboard layout`}
+                      style={{
+                        maxWidth: '100%',
+                        maxHeight: '100px',
+                        objectFit: 'contain'
+                      }}
+                    />
+                  ) : (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        {selectedLayout} ({keyboardLanguages.find(l => l.code === selectedLanguage)?.name})
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                        Layout image not available
+                      </Typography>
+                    </Box>
+                  )
+                ) : (
+                  <Typography variant="caption" color="text.secondary">
+                    Select a layout to preview
+                  </Typography>
+                )}
               </Box>
             </Box>
           </SettingSection>

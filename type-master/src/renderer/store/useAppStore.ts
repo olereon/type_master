@@ -46,7 +46,7 @@ const defaultSettings: UserSettings = {
   whitespaceSymbol: '\u00B7', // Middle dot as default
   showWhitespaceSymbols: false, // Hidden by default
   cursorType: 'block', // Block cursor as default
-  keyboardLayout: 'QWERTY', // QWERTY layout as default
+  keyboardLayout: 'US-QWERTY', // US-QWERTY layout as default
   keyboardLanguage: 'en', // English as default language
 };
 
