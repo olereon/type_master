@@ -48,6 +48,7 @@ const defaultSettings: UserSettings = {
   cursorType: 'block', // Block cursor as default
   keyboardLayout: 'US-QWERTY', // US-QWERTY layout as default
   keyboardLanguage: 'en', // English as default language
+  enableKeyboardRowColors: false, // Keyboard row colors disabled by default
 };
 
 const defaultTextSource: TextSource = {

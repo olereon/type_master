@@ -36,6 +36,7 @@ export interface UserSettings {
   cursorType: 'block' | 'box' | 'line' | 'underline'; // Cursor visualization type
   keyboardLayout: string; // Keyboard layout type (depends on language)
   keyboardLanguage: string; // Keyboard language code
+  enableKeyboardRowColors: boolean; // Enable keyboard row-based character coloring
 }
 
 export interface TextSource {

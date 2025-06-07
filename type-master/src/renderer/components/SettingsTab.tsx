@@ -184,6 +184,7 @@ const SettingsTab: React.FC = () => {
       cursorType: 'block',
       keyboardLayout: 'US-QWERTY',
       keyboardLanguage: 'en',
+      enableKeyboardRowColors: false,
     });
     setSelectedLanguage('en');
     setSelectedLayout('US-QWERTY');
@@ -542,7 +543,53 @@ const SettingsTab: React.FC = () => {
               </Box>
             </Box>
 
-            {/* Space for upcoming Keyboard Row Colors feature */}
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="body2" color="text.secondary" gutterBottom>
+                Keyboard Row Colors (Experimental)
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.enableKeyboardRowColors}
+                    onChange={(e) => updateSettings({ enableKeyboardRowColors: e.target.checked })}
+                  />
+                }
+                label="Enable keyboard row-based character coloring"
+              />
+              <Typography variant="caption" display="block" color="text.secondary" sx={{ ml: 7, mt: 0.5 }}>
+                Colors characters based on their keyboard row position to help learn typing patterns
+              </Typography>
+              
+              {settings.enableKeyboardRowColors && (
+                <Box sx={{ mt: 2, p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
+                  <Typography variant="caption" color="text.secondary" gutterBottom>
+                    Row Color Preview:
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 16, height: 16, bgcolor: '#FFEAA7', borderRadius: 0.5 }} />
+                      <Typography variant="caption">Row 1: Numbers</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 16, height: 16, bgcolor: '#4ECDC4', borderRadius: 0.5 }} />
+                      <Typography variant="caption">Row 2: QWERTY</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 16, height: 16, bgcolor: '#45B7D1', borderRadius: 0.5 }} />
+                      <Typography variant="caption">Row 3: ASDF</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 16, height: 16, bgcolor: '#96CEB4', borderRadius: 0.5 }} />
+                      <Typography variant="caption">Row 4: ZXCV</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ width: 16, height: 16, bgcolor: '#808080', borderRadius: 0.5 }} />
+                      <Typography variant="caption">Row 5: Space</Typography>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
+            </Box>
           </SettingSection>
         </SettingsColumn>
 

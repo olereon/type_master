@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useMemo, useCallback, useState } from 'react'
 import { Box, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import { useAppStore } from '../store/useAppStore';
+import { getKeyRow, getRowColor } from '../utils/keyMappings';
 
 const TypingWrapper = styled(Box)({
   display: 'flex',
@@ -67,18 +68,24 @@ const Character = styled('span')<{
   textColor?: string;
   isSpace?: boolean;
   cursorType?: 'block' | 'box' | 'line' | 'underline';
+  rowColor?: string;
+  enableRowColors?: boolean;
 }>(
-  ({ theme, status, textColor, isSpace, cursorType }) => ({
+  ({ theme, status, textColor, isSpace, cursorType, rowColor, enableRowColors }) => ({
     position: 'relative',
     color:
       isSpace 
         ? 'transparent' // Make space character invisible so we can show symbol overlay
         : status === 'pending'
-        ? textColor || theme.palette.text.primary
+        ? enableRowColors && rowColor 
+          ? rowColor 
+          : textColor || theme.palette.text.primary
         : status === 'correct'
         ? theme.palette.grey[600]
         : status === 'incorrect'
         ? theme.palette.error.main
+        : enableRowColors && rowColor 
+        ? rowColor 
         : textColor || theme.palette.text.primary,
     backgroundColor:
       status === 'current' && cursorType === 'block'
@@ -94,8 +101,10 @@ const WhitespaceSymbol = styled('span')<{
   status: 'pending' | 'correct' | 'incorrect' | 'current';
   showWhitespace: boolean;
   textColor?: string;
+  rowColor?: string;
+  enableRowColors?: boolean;
 }>(
-  ({ theme, status, showWhitespace, textColor }) => ({
+  ({ theme, status, showWhitespace, textColor, rowColor, enableRowColors }) => ({
     position: 'absolute',
     left: 0,
     top: '50%',
@@ -106,6 +115,8 @@ const WhitespaceSymbol = styled('span')<{
         : showWhitespace
         ? status === 'correct'
           ? theme.palette.grey[600]
+          : enableRowColors && rowColor 
+          ? rowColor 
           : textColor || theme.palette.text.primary
         : 'transparent',
     pointerEvents: 'none',
@@ -434,6 +445,10 @@ const TypingArea: React.FC<TypingAreaProps> = ({
         
         const isWhitespace = char === ' ';
         
+        // Get keyboard row color for this character
+        const keyRow = !isPadding ? getKeyRow(char, settings.keyboardLayout) : null;
+        const rowColor = keyRow ? getRowColor(keyRow) : undefined;
+        
         // Only increment absoluteIndex for non-padding characters
         if (!isPadding) {
           absoluteIndex++;
@@ -447,6 +462,8 @@ const TypingArea: React.FC<TypingAreaProps> = ({
             textColor={settings.textColor}
             isSpace={isWhitespace}
             cursorType={settings.cursorType}
+            rowColor={rowColor}
+            enableRowColors={settings.enableKeyboardRowColors}
             style={{
               color: isPadding ? 'transparent' : undefined,
               backgroundColor: isPadding ? 'transparent' : undefined,
@@ -460,6 +477,8 @@ const TypingArea: React.FC<TypingAreaProps> = ({
                 status={status}
                 showWhitespace={settings.showWhitespaceSymbols}
                 textColor={settings.textColor}
+                rowColor={rowColor}
+                enableRowColors={settings.enableKeyboardRowColors}
               >
                 {settings.whitespaceSymbol}
               </WhitespaceSymbol>
