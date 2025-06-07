@@ -148,7 +148,7 @@ const SettingsTab: React.FC = () => {
     { code: 'es', name: 'Español' },
     { code: 'fr', name: 'Français' },
     { code: 'de', name: 'Deutsch' },
-    { code: 'uk', name: 'Українська' },
+    { code: 'ua', name: 'Українська' },
   ];
 
   const keyboardLayouts: Record<string, string[]> = {
@@ -156,7 +156,7 @@ const SettingsTab: React.FC = () => {
     es: ['LATAM', 'Standart'],
     fr: ['BEPO', 'Canadian', 'Standart'],
     de: ['Standart'],
-    uk: ['Standart'],
+    ua: ['Standart'],
   };
 
   // Fix legacy layout settings
@@ -182,21 +182,17 @@ const SettingsTab: React.FC = () => {
         es: 'Spanish', 
         fr: 'French',
         de: 'German',
-        uk: 'Ukrainian'
+        ua: 'Ukrainian'
       };
       
       const fileLanguageName = languageFileNames[selectedLanguage] || 'English';
       const imageName = `Layout_${fileLanguageName}_${selectedLayout}.png`;
       
-      console.log(`Attempting to load: ${imageName}`);
-      console.log(`Language: ${selectedLanguage}, Layout: ${selectedLayout}`);
-      
       try {
         const imageModule = await import(`../assets/keyboard-layouts/${imageName}`);
-        console.log(`Successfully loaded: ${imageName}`);
         setLayoutImageSrc(imageModule.default);
       } catch (error) {
-        console.log(`Layout image not found: ${imageName}`, error);
+        console.log(`Layout image not found: ${imageName}`);
         setLayoutImageSrc('');
       }
     };
