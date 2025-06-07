@@ -18,6 +18,7 @@ import { Language, Keyboard } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { HexColorPicker } from 'react-colorful';
 import { useAppStore } from '../store/useAppStore';
+import { getLayoutImageSrc } from '../utils/keyboardLayouts';
 
 const SettingsContainer = styled(Box)(({ theme }) => ({
   padding: theme.spacing(2),
@@ -165,40 +166,7 @@ const SettingsTab: React.FC = () => {
   const [selectedLanguage, setSelectedLanguage] = React.useState(settings.keyboardLanguage || 'en');
   const [selectedLayout, setSelectedLayout] = React.useState(normalizedLayout || 'US-QWERTY');
   
-  // State for layout image
-  const [layoutImageSrc, setLayoutImageSrc] = React.useState<string>('');
-
-  // Load layout image dynamically
-  React.useEffect(() => {
-    const loadLayoutImage = async () => {
-      if (!selectedLanguage || !selectedLayout) {
-        setLayoutImageSrc('');
-        return;
-      }
-
-      // Map language codes to filename prefixes
-      const languageFileNames: Record<string, string> = {
-        en: 'English',
-        es: 'Spanish', 
-        fr: 'French',
-        de: 'German',
-        ua: 'Ukrainian'
-      };
-      
-      const fileLanguageName = languageFileNames[selectedLanguage] || 'English';
-      const imageName = `Layout_${fileLanguageName}_${selectedLayout}.png`;
-      
-      try {
-        const imageModule = await import(`../assets/keyboard-layouts/${imageName}`);
-        setLayoutImageSrc(imageModule.default);
-      } catch (error) {
-        console.log(`Layout image not found: ${imageName}`);
-        setLayoutImageSrc('');
-      }
-    };
-
-    loadLayoutImage();
-  }, [selectedLanguage, selectedLayout]);
+  const layoutImageSrc = getLayoutImageSrc(selectedLanguage, selectedLayout);
 
   const handleResetSettings = () => {
     updateSettings({
@@ -511,7 +479,7 @@ const SettingsTab: React.FC = () => {
                 borderRadius: 1,
                 backgroundColor: '#FFFFFF',
                 textAlign: 'center',
-                minHeight: 120,
+                minHeight: 240,
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -526,7 +494,7 @@ const SettingsTab: React.FC = () => {
                       alt={`${selectedLayout} keyboard layout`}
                       style={{
                         maxWidth: '100%',
-                        maxHeight: '100px',
+                        maxHeight: '200px',
                         objectFit: 'contain'
                       }}
                     />
