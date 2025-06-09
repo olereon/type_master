@@ -289,7 +289,7 @@ const TypingArea: React.FC<TypingAreaProps> = ({
     }
   }, [isActive]);
 
-  // Process text into padded lines
+  // Process ALL text into padded lines (no limit)
   const processedLines = useMemo(() => {
     const charsPerLine = calculateCharsPerLine();
     const lines: string[] = [];
@@ -297,46 +297,43 @@ const TypingArea: React.FC<TypingAreaProps> = ({
     
     let currentLine = '';
     let currentLineLength = 0;
-    let totalCharsProcessed = 0;
     
     for (const word of words) {
-      // Check if we've reached the total character limit
-      if (totalCharsProcessed >= MAX_TOTAL_CHARS) {
-        break;
-      }
-      
       // Check if word fits in current line
       if (currentLineLength + word.length <= charsPerLine) {
         currentLine += word;
         currentLineLength += word.length;
-        totalCharsProcessed += word.length;
       } else {
         // Pad current line and start new one
         if (currentLine) {
           const padding = PADDING_CHAR.repeat(charsPerLine - currentLineLength);
           lines.push(currentLine + padding);
-          totalCharsProcessed += padding.length;
         }
         
-        // Check if we've reached the line limit
-        if (lines.length >= MAX_VISIBLE_LINES) {
-          break;
-        }
-        
-        // If word is longer than charsPerLine, truncate it
+        // If word is longer than charsPerLine, break it into multiple lines
         if (word.length > charsPerLine) {
-          currentLine = word.substring(0, charsPerLine);
-          currentLineLength = charsPerLine;
+          let remainingWord = word;
+          while (remainingWord.length > 0) {
+            const chunk = remainingWord.substring(0, charsPerLine);
+            if (chunk.length === charsPerLine) {
+              lines.push(chunk); // Full line, no padding needed
+            } else {
+              const padding = PADDING_CHAR.repeat(charsPerLine - chunk.length);
+              lines.push(chunk + padding);
+            }
+            remainingWord = remainingWord.substring(charsPerLine);
+          }
+          currentLine = '';
+          currentLineLength = 0;
         } else {
           currentLine = word;
           currentLineLength = word.length;
         }
-        totalCharsProcessed += currentLineLength;
       }
     }
     
     // Handle last line
-    if (currentLine && lines.length < MAX_VISIBLE_LINES) {
+    if (currentLine) {
       const padding = PADDING_CHAR.repeat(Math.max(0, charsPerLine - currentLineLength));
       lines.push(currentLine + padding);
     }
@@ -390,23 +387,35 @@ const TypingArea: React.FC<TypingAreaProps> = ({
       charCount += realChars.length;
     }
     
-    // Calculate window start based on current position
-    let startLineIndex = Math.max(0, targetLineIndex - MAX_VISIBLE_LINES + 3);
+    // Calculate window start to keep cursor in view
+    let startLineIndex = 0;
     
-    // When cursor is on 2nd to last visible line, shift window up
+    // Basic positioning: try to keep cursor in middle of window
+    const idealStart = targetLineIndex - Math.floor(MAX_VISIBLE_LINES / 2);
+    startLineIndex = Math.max(0, idealStart);
+    
+    // Ensure we don't go past the end
+    const maxStart = Math.max(0, processedLines.length - MAX_VISIBLE_LINES);
+    startLineIndex = Math.min(startLineIndex, maxStart);
+    
+    // Special handling when cursor is approaching the bottom of visible window
     const currentVisibleLine = targetLineIndex - startLineIndex;
-    if (currentVisibleLine >= MAX_VISIBLE_LINES - 2) {
+    if (currentVisibleLine >= MAX_VISIBLE_LINES - 2 && targetLineIndex < processedLines.length - 1) {
+      // Shift window up to show more content below
       startLineIndex = Math.min(
-        processedLines.length - MAX_VISIBLE_LINES,
-        targetLineIndex - MAX_VISIBLE_LINES + 3
+        targetLineIndex - MAX_VISIBLE_LINES + 3,
+        maxStart
       );
     }
     
-    // Get visible lines
-    const visibleLines = processedLines.slice(
-      startLineIndex,
-      Math.min(startLineIndex + MAX_VISIBLE_LINES, processedLines.length)
-    );
+    // Get visible lines - always show MAX_VISIBLE_LINES if possible
+    const endLineIndex = Math.min(startLineIndex + MAX_VISIBLE_LINES, processedLines.length);
+    const visibleLines = processedLines.slice(startLineIndex, endLineIndex);
+    
+    // If we have fewer lines than MAX_VISIBLE_LINES, pad with empty lines
+    while (visibleLines.length < MAX_VISIBLE_LINES && startLineIndex === 0) {
+      visibleLines.push(PADDING_CHAR.repeat(calculateCharsPerLine()));
+    }
     
     // Calculate total start index for absolute positioning
     let totalStartIndex = 0;
@@ -423,7 +432,7 @@ const TypingArea: React.FC<TypingAreaProps> = ({
       totalStartIndex,
       paddingChar: PADDING_CHAR
     };
-  }, [processedLines, currentIndex]);
+  }, [processedLines, currentIndex, calculateCharsPerLine]);
   
   const renderText = () => {
     let absoluteIndex = textWindow.totalStartIndex;

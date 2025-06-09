@@ -84,8 +84,17 @@ const MainTab: React.FC = () => {
   const startTimeRef = useRef<number>(0);
   const lastKeyTimeRef = useRef<number>(0);
   const sessionStartTimeRef = useRef<number>(0);
+  const [checkpointBaseTime, setCheckpointBaseTime] = useState<number>(0); // Base elapsed time from checkpoint
+  const [displayTime, setDisplayTime] = useState<number>(0); // Current display time in seconds
 
   const activeText = textSources.find(t => t.id === activeTextSourceId)?.content || '';
+
+  // Format time as MM:SS
+  const formatTime = useCallback((timeInSeconds: number): string => {
+    const minutes = Math.floor(timeInSeconds / 60);
+    const seconds = timeInSeconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }, []);
 
   const calculateWPM = useCallback((chars: number, timeMs: number): number => {
     if (timeMs === 0) return 0;
@@ -101,7 +110,8 @@ const MainTab: React.FC = () => {
   const handleStop = useCallback(() => {
     if (currentSession && hasStartedTyping) {
       const endTime = new Date();
-      const totalTime = endTime.getTime() - sessionStartTimeRef.current;
+      const currentSessionElapsed = endTime.getTime() - sessionStartTimeRef.current;
+      const totalTime = checkpointBaseTime + currentSessionElapsed;
       const wpm = calculateWPM(currentSession.correctChars, totalTime);
       const accuracy = currentSession.accuracy / 100; // Convert to 0-1 range
       const score = calculateScore(wpm, accuracy, currentSession.typedChars, settings.scoreK0, settings.scoreK1, settings.scoreK2);
@@ -128,10 +138,12 @@ const MainTab: React.FC = () => {
     setIsRunning(false);
     setTypingFieldActive(false);
     setHasStartedTyping(false);
+    setCheckpointBaseTime(0); // Reset checkpoint base time
+    setDisplayTime(0); // Reset display time
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
-  }, [currentSession, hasStartedTyping, calculateWPM, endSession, setTypingFieldActive, settings.scoreK0, settings.scoreK1, settings.scoreK2]);
+  }, [currentSession, hasStartedTyping, checkpointBaseTime, calculateWPM, endSession, setTypingFieldActive, settings.scoreK0, settings.scoreK1, settings.scoreK2, getNextSessionId]);
 
   useEffect(() => {
     if (isRunning && hasStartedTyping && mode === 'time') {
@@ -153,6 +165,27 @@ const MainTab: React.FC = () => {
     };
   }, [isRunning, hasStartedTyping, mode, targetValue, handleStop]);
 
+  // Update display time every second
+  useEffect(() => {
+    let timeUpdateInterval: NodeJS.Timeout | null = null;
+    
+    if (isRunning && hasStartedTyping) {
+      timeUpdateInterval = setInterval(() => {
+        const currentSessionElapsed = Date.now() - sessionStartTimeRef.current;
+        const totalElapsedMs = checkpointBaseTime + currentSessionElapsed;
+        setDisplayTime(Math.floor(totalElapsedMs / 1000));
+      }, 1000);
+    } else {
+      setDisplayTime(Math.floor(checkpointBaseTime / 1000));
+    }
+    
+    return () => {
+      if (timeUpdateInterval) {
+        clearInterval(timeUpdateInterval);
+      }
+    };
+  }, [isRunning, hasStartedTyping, checkpointBaseTime]);
+
   const handleStart = () => {
     // Load checkpoint if in free mode and checkpoint exists
     if (mode === 'free' && activeTextSourceId) {
@@ -162,7 +195,17 @@ const MainTab: React.FC = () => {
         setErrors(new Set(activeSource.freeCheckpoint.errors));
         setTypedText(activeText.substring(0, activeSource.freeCheckpoint.position));
         setProgress((activeSource.freeCheckpoint.position / activeText.length) * 100);
+        
+        // Set base time from checkpoint - timer will continue from this point
+        const checkpointElapsedTime = activeSource.freeCheckpoint.elapsedTime || 0;
+        setCheckpointBaseTime(checkpointElapsedTime);
+      } else {
+        // Reset base time if no checkpoint
+        setCheckpointBaseTime(0);
       }
+    } else {
+      // Reset base time for non-free modes
+      setCheckpointBaseTime(0);
     }
 
     const newSession: TypingSession = {
@@ -191,15 +234,20 @@ const MainTab: React.FC = () => {
       setCurrentIndex(0);
       setErrors(new Set());
     }
+    // Set session start time for all modes
+    sessionStartTimeRef.current = Date.now();
     setHasStartedTyping(false);
     setTypingFieldActive(true);
     setShowCompletionOverlay(false);
-    sessionStartTimeRef.current = Date.now();
   };
 
 
   const handleKeyPress = (key: string) => {
-    if (!isRunning || !currentSession || currentIndex >= activeText.length) return;
+    // Check against original text length without padding characters
+    const originalTextLength = activeText.replace(new RegExp(TYPING_PADDING_CHAR, 'g'), '').length;
+    const currentNonPaddingIndex = typedText.length; // typedText doesn't include padding chars
+    
+    if (!isRunning || !currentSession || currentNonPaddingIndex >= originalTextLength) return;
     
     // Start timer on first character typed
     if (!hasStartedTyping) {
@@ -223,13 +271,17 @@ const MainTab: React.FC = () => {
       timeSinceLastKey,
     };
     
+    // Calculate total elapsed time including checkpoint base time
+    const currentSessionElapsed = currentTime - sessionStartTimeRef.current;
+    const totalElapsedTime = checkpointBaseTime + currentSessionElapsed;
+    
     const updatedSession: TypingSession = {
       ...currentSession,
       typedChars: currentSession.typedChars + 1,
       correctChars: isCorrect ? currentSession.correctChars + 1 : currentSession.correctChars,
       incorrectChars: !isCorrect ? currentSession.incorrectChars + 1 : currentSession.incorrectChars,
       keyPresses: [...currentSession.keyPresses, keyPress],
-      wpm: hasStartedTyping ? calculateWPM(currentSession.correctChars + (isCorrect ? 1 : 0), currentTime - startTimeRef.current) : 0,
+      wpm: hasStartedTyping ? calculateWPM(currentSession.correctChars + (isCorrect ? 1 : 0), totalElapsedTime) : 0,
       accuracy: calculateAccuracy(
         currentSession.correctChars + (isCorrect ? 1 : 0),
         currentSession.typedChars + 1
@@ -268,7 +320,8 @@ const MainTab: React.FC = () => {
       const newProgress = (nonPaddingCount / totalNonPadding) * 100;
       setProgress(Math.min(newProgress, 100));
       
-      if (nextIndex >= activeText.length) {
+      // Check completion against original text length (not including padding)
+      if (nonPaddingCount >= totalNonPadding) {
         handleStop();
       }
     }
@@ -276,11 +329,16 @@ const MainTab: React.FC = () => {
 
   // Checkpoint functionality for free mode
   const handleSaveCheckpoint = useCallback(() => {
-    if (mode === 'free' && activeTextSourceId && isRunning) {
+    if (mode === 'free' && activeTextSourceId && isRunning && hasStartedTyping) {
+      const currentTime = Date.now();
+      const currentSessionElapsed = currentTime - sessionStartTimeRef.current;
+      const totalElapsedTime = checkpointBaseTime + currentSessionElapsed;
+      
       const checkpoint = {
         position: currentIndex,
         errors: Array.from(errors),
         timestamp: new Date(),
+        elapsedTime: totalElapsedTime,
       };
       updateTextSource(activeTextSourceId, { freeCheckpoint: checkpoint });
       
@@ -288,7 +346,7 @@ const MainTab: React.FC = () => {
       setShowSaveMessage(true);
       setTimeout(() => setShowSaveMessage(false), 3000);
     }
-  }, [mode, activeTextSourceId, isRunning, currentIndex, errors, updateTextSource]);
+  }, [mode, activeTextSourceId, isRunning, hasStartedTyping, currentIndex, errors, checkpointBaseTime, updateTextSource]);
 
   const handleLoadCheckpoint = useCallback(() => {
     if (mode === 'free' && activeTextSourceId && isRunning) {
@@ -298,6 +356,11 @@ const MainTab: React.FC = () => {
         setErrors(new Set(activeSource.freeCheckpoint.errors));
         setTypedText(activeText.substring(0, activeSource.freeCheckpoint.position));
         setProgress((activeSource.freeCheckpoint.position / activeText.length) * 100);
+        
+        // Set base time from checkpoint and reset session start to current time
+        const checkpointElapsedTime = activeSource.freeCheckpoint.elapsedTime || 0;
+        setCheckpointBaseTime(checkpointElapsedTime);
+        sessionStartTimeRef.current = Date.now();
         
         // Update current session to reflect checkpoint state
         if (currentSession) {
@@ -344,6 +407,15 @@ const MainTab: React.FC = () => {
       
       <ContentArea>
         <MetricsContainer elevation={0}>
+          <MetricItem>
+            <Typography variant="h6" color="info.main">
+              {formatTime(displayTime)}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Time
+            </Typography>
+          </MetricItem>
+
           <MetricItem>
             <Typography variant="h6" color="primary">
               {currentSession?.typedChars || 0}
@@ -416,6 +488,8 @@ const MainTab: React.FC = () => {
             setHasStartedTyping(false);
             setIsRunning(false);
             setShowCompletionOverlay(false);
+            setCheckpointBaseTime(0); // Reset checkpoint base time
+            setDisplayTime(0); // Reset display time
             
             if (intervalRef.current) {
               clearInterval(intervalRef.current);

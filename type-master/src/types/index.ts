@@ -49,6 +49,7 @@ export interface TextSource {
     position: number;
     errors: number[];
     timestamp: Date;
+    elapsedTime: number; // Total elapsed time in milliseconds when checkpoint was saved
   };
 }
 
