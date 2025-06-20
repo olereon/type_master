@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -29,6 +29,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import { useAppStore } from '../store/useAppStore';
 import { TextSource } from '../../types';
 import { v4 as uuidv4 } from 'uuid';
+import { normalizeText, checkForNonStandardCharacters } from '../utils/textNormalizer';
 
 const Container = styled(Box)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -84,13 +85,23 @@ const ProgressBar = styled(LinearProgress)(() => ({
 }));
 
 const TextSourceTab: React.FC = () => {
-  const { textSources, activeTextSourceId, addTextSource, removeTextSource, updateTextSource, setActiveTextSource } = useAppStore();
+  const { textSources, activeTextSourceId, addTextSource, removeTextSource, updateTextSource, setActiveTextSource, normalizeAllTexts } = useAppStore();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingSource, setEditingSource] = useState<TextSource | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     content: '',
   });
+
+  // Run text normalization once when component mounts
+  useEffect(() => {
+    const hasRunNormalization = localStorage.getItem('text-normalization-v1');
+    if (!hasRunNormalization) {
+      console.log('Running one-time text normalization for existing text sources...');
+      normalizeAllTexts();
+      localStorage.setItem('text-normalization-v1', 'true');
+    }
+  }, [normalizeAllTexts]);
 
   const handleOpenDialog = (source?: TextSource) => {
     if (source) {
@@ -112,12 +123,15 @@ const TextSourceTab: React.FC = () => {
   const handleSave = () => {
     if (!formData.name.trim() || !formData.content.trim()) return;
 
+    // Normalize the content
+    const normalizedContent = normalizeText(formData.content.trim());
+
     if (editingSource) {
       // Update existing source
       const updatedSource: TextSource = {
         ...editingSource,
         name: formData.name,
-        content: formData.content,
+        content: normalizedContent,
       };
       // Remove old and add updated
       removeTextSource(editingSource.id);
@@ -127,7 +141,7 @@ const TextSourceTab: React.FC = () => {
       const newSource: TextSource = {
         id: uuidv4(),
         name: formData.name,
-        content: formData.content,
+        content: normalizedContent,
         type: 'custom',
         createdAt: new Date(),
       };
@@ -148,11 +162,23 @@ const TextSourceTab: React.FC = () => {
     if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        const content = e.target?.result as string;
+        const rawContent = e.target?.result as string;
+        
+        // Check for non-standard characters
+        const { hasNonStandard, characters } = checkForNonStandardCharacters(rawContent);
+        
+        // Normalize the text
+        const normalizedContent = normalizeText(rawContent.trim());
+        
+        // Log if characters were replaced
+        if (hasNonStandard) {
+          console.log(`Normalized ${characters.length} non-standard characters in "${file.name}":`, characters);
+        }
+        
         const newSource: TextSource = {
           id: uuidv4(),
           name: file.name.replace(/\.[^/.]+$/, ''),
-          content: content.trim(),
+          content: normalizedContent,
           type: 'imported',
           createdAt: new Date(),
         };
@@ -224,6 +250,17 @@ const TextSourceTab: React.FC = () => {
             onClick={generateRandomText}
           >
             Generate Random
+          </Button>
+          <Button
+            variant="outlined"
+            color="secondary"
+            onClick={() => {
+              normalizeAllTexts();
+              console.log('Manually normalized all text sources');
+            }}
+            sx={{ ml: 1 }}
+          >
+            Normalize Texts
           </Button>
         </Box>
       </HeaderSection>

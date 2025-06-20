@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { TypingSession, UserSettings, TextSource } from '../../types';
+import { normalizeText } from '../utils/textNormalizer';
 
 interface AppState {
   // Sessions
@@ -31,6 +32,7 @@ interface AppState {
   setActiveTextSource: (id: string) => void;
   setTypingFieldActive: (active: boolean) => void;
   getNextSessionId: () => string;
+  normalizeAllTexts: () => void;
 }
 
 const defaultSettings: UserSettings = {
@@ -122,6 +124,14 @@ export const useAppStore = create<AppState>()(
         
         return `${nextCounter.toString().padStart(5, '0')}-${year}-${month}-${day}-${hours}${minutes}${seconds}`;
       },
+
+      // Normalize all existing text sources
+      normalizeAllTexts: () => set((state) => ({
+        textSources: state.textSources.map(source => ({
+          ...source,
+          content: normalizeText(source.content)
+        }))
+      })),
     }),
     {
       name: 'type-master-storage',
